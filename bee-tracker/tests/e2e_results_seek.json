@@ -1,0 +1,23 @@
+{
+ "one_bee": {
+  "samples": 900,
+  "expected": 900,
+  "seconds": 38.8,
+  "found_frac": 1.0,
+  "err_mm_median": 0.11944559430971109,
+  "err_mm_p95": 0.8164817736810351,
+  "err_mm_max": 1.0151354589413146,
+  "id_switches": 0,
+  "id_switches_not_near_merge": 0,
+  "bee_contact_s": 0.0,
+  "merges": 0,
+  "reacquired": 0,
+  "distance_mm": 674.9461496473705,
+  "gt_distance_mm": 717.9085920506113,
+  "distance_err_pct": -5.984388942960593,
+  "moving_frac": 0.6017756405871191,
+  "gt_moving_frac": 0.5827777777777777,
+  "detect_msg": "One bee \u2248 1949 px\u00b2 (median of 1 blob).",
+  "run_msg": "Tracked 01:00.00 in 38.8 s: 900 samples (100% of 900 expected)."
+ }
+}

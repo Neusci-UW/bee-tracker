@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bee Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Visual system shared with PER Scorer (kyobisk/per-scorer). */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#18212a; --muted:#5d6b78; --line:#d9e0e5; --soft:#e9eef1;
+  --accent:#b06e00; --accent-ink:#ffffff; --accent-soft:#fbefd9;
+  --good:#1f7a4d; --good-soft:#dcf1e5; --bad:#b3362c; --bad-soft:#f8e1de; --warn:#946200;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12171c; --panel:#1a2128; --ink:#e4e9ed; --muted:#93a1ad; --line:#2c3640; --soft:#222b33;
+  --accent:#f0a92e; --accent-ink:#1a1206; --accent-soft:#3a2c12;
+  --good:#5fd39a; --good-soft:#163527; --bad:#ff8a7e; --bad-soft:#3d1d1a; --warn:#f0c060; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0;padding:16px 16px 40px}
+h1,h2,h3{margin:0;text-wrap:balance}
+h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+h3{font-size:14px;font-weight:600}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 10px;line-height:1.2}
+button:hover:not(:disabled){border-color:var(--muted)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+button.ghost:hover{color:var(--ink);border-color:var(--line)}
+button.on{background:var(--accent-soft);border-color:var(--accent)}
+input,select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+input[type=number]{font-family:var(--mono)}
+input[type=range]{padding:0;border:0;accent-color:var(--accent)}
+label{color:var(--muted);font-size:12px}
+.wrap{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px}
+.brand p{margin:0;color:var(--muted);font-size:12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.meta input{width:150px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+@media (max-width:1050px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spread{justify-content:space-between}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fields input,.fields select{width:100%}
+.help{color:var(--muted);font-size:12px;margin:0}
+.msg{font-size:12px;margin:0;color:var(--ink)}
+.msg.bad{color:var(--bad)} .msg.warn{color:var(--warn)} .msg.good{color:var(--good)}
+
+/* video stage */
+.stage{position:relative;background:#0b0e11;border-radius:6px;overflow:hidden;aspect-ratio:16/9;max-width:100%;display:grid;place-items:center}
+.stage video{width:100%;height:100%;object-fit:contain;display:block}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.stage.drawing canvas{cursor:crosshair}
+.stage.over{outline:2px dashed #f0a92e;outline-offset:-10px}
+.stage .hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);color:#8d9aa5;font-size:12px;text-align:center;width:max-content;max-width:calc(100% - 24px);pointer-events:none}
+.stage .badge{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.65);color:#fff;font-family:var(--mono);font-size:12px;padding:3px 8px;border-radius:4px;pointer-events:none}
+.source{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.source form{display:flex;gap:6px;flex:1 1 280px;min-width:0}
+.source input{flex:1;min-width:0}
+.transport{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.clock{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.sep{width:1px;height:22px;background:var(--line)}
+
+/* lists and tables */
+.recs{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.rec{display:grid;grid-template-columns:1fr auto;gap:2px 8px;text-align:left;padding:7px 10px;align-items:center}
+.rec.cur{border-color:var(--accent);background:var(--accent-soft)}
+.rec .id{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec .sub{grid-column:1;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;font-family:var(--mono);white-space:nowrap}
+.pill.yes{background:var(--good-soft);color:var(--good)}
+.pill.na{background:var(--soft);color:var(--muted)}
+.pill.ex{background:var(--accent-soft);color:var(--accent)}
+.zones{display:flex;flex-direction:column;gap:6px}
+.zone{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:6px;align-items:center}
+.zone input{width:100%}
+.sw{width:12px;height:12px;border-radius:3px}
+.tbl-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;z-index:1}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.pooled td{font-weight:600;background:var(--soft)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+.empty{color:var(--muted);font-size:13px;padding:14px;text-align:center}
+.progress{height:8px;background:var(--soft);border-radius:999px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+.res-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1050px){.res-grid{grid-template-columns:minmax(0,1fr)}}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--sans);font-size:11px;fill:var(--muted)}
+.pv{font-family:var(--mono);font-size:12px}
+.pv.sig{color:var(--accent);font-weight:600}
+.checks{display:flex;flex-wrap:wrap;gap:4px 14px}
+.checks label{color:var(--ink);font-size:13px;display:flex;align-items:center;gap:5px}
+.hotkeys{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;color:var(--muted)}
+.hotkeys kbd{font-family:var(--mono);color:var(--ink);font-size:11px;background:var(--soft);border:1px solid var(--line);border-radius:3px;padding:0 5px;justify-self:start}
+details>summary{cursor:pointer;color:var(--muted);font-size:12px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:90vw}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="var(--accent)"/><path d="M7 25c4-1 5-6 9-7s6 3 11-3" fill="none" stroke="var(--accent-ink)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.2"/><circle cx="25" cy="12" r="3.4" fill="var(--accent-ink)"/></svg>
+      <div><h1>Bee Tracker</h1><p>Centroid tracking of free-moving bees from video</p></div>
+    </div>
+    <div class="meta">
+      <div class="f"><label for="m-exp">Experimenter</label><input id="m-exp" placeholder="Initials"></div>
+      <div class="f"><label for="m-date">Date</label><input id="m-date" type="date"></div>
+      <div class="f"><label for="m-exp-id">Experiment</label><input id="m-exp-id" placeholder="e.g. Arena activity, day 1"></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-label="Video">
+        <div class="source">
+          <button class="primary" id="pickVid">Open video file…</button>
+          <form id="urlForm"><input id="vidUrl" type="url" placeholder="…or paste a link to a video file (.mp4, .webm)" aria-label="Link to a video file"><button type="submit">Load link</button></form>
+          <button class="ghost" id="bCloseVid" hidden>Close video</button>
+        </div>
+        <p class="msg bad" id="srcMsg" hidden></p>
+        <div class="stage" id="stage">
+          <video id="vid" playsinline muted preload="auto"></video>
+          <canvas id="ov" aria-label="Video overlay: arena, zones and tracks"></canvas>
+          <div class="hint" id="stageHint">No video loaded. Open a file or link above, or drop a video here.</div>
+          <div class="badge" id="badge" hidden></div>
+        </div>
+        <input type="file" id="vidFile" accept="video/*" hidden>
+        <div class="transport">
+          <button id="bPlay" style="min-width:64px" title="Play / pause (Space)">Play</button>
+          <button id="bBack1" title="Back 1 s (←)">−1s</button>
+          <button id="bFrmB" title="Previous frame (,)">◂ fr</button>
+          <button id="bFrmF" title="Next frame (.)">fr ▸</button>
+          <button id="bFwd1" title="Forward 1 s (→)">+1s</button>
+          <span class="sep"></span>
+          <label for="rate">Speed</label>
+          <select id="rate"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
+          <label for="fps">fps</label><input id="fps" type="number" value="30" min="1" max="1000" style="width:64px">
+          <span class="sep"></span>
+          <span class="clock" id="clock">00:00.00</span><span class="help" id="dur"></span>
+        </div>
+        <input id="seek" type="range" min="0" max="1" step="0.001" value="0" aria-label="Seek" disabled>
+        <div class="row">
+          <button id="bArena" title="Drag a box around the arena floor">Draw arena</button>
+          <select id="arenaShape" aria-label="Arena shape"><option value="ellipse">round</option><option value="rect">rectangular</option></select>
+          <span class="sep"></span>
+          <button id="bZone" title="Drag a box to add a zone">Add zone</button>
+          <select id="zoneShape" aria-label="Zone shape"><option value="rect">rectangle</option><option value="ellipse">circle / ellipse</option></select>
+          <span class="sep"></span>
+          <div class="checks">
+            <label><input type="checkbox" id="vMask"> Show detection</label>
+            <label><input type="checkbox" id="vTrails" checked> Show tracks</label>
+          </div>
+        </div>
+        <p class="help" id="drawHelp">Draw the arena first: press <b>Draw arena</b>, then drag a box around the floor of the arena on the video.</p>
+      </section>
+
+      <section class="panel" aria-label="Results" id="resPanel">
+        <div class="row spread"><h2>Results · <span id="resRec"></span></h2><span class="help" id="resNote"></span></div>
+        <div class="fields">
+          <div class="f"><label for="x-smooth">Position smoothing (s)</label><input id="x-smooth" type="number" min="0" step="0.05"></div>
+          <div class="f"><label for="x-move">Moving above (<span class="u">mm</span>/s)</label><input id="x-move" type="number" min="0" step="0.5"></div>
+          <div class="f"><label for="x-gap">Longest gap bridged (s)</label><input id="x-gap" type="number" min="0" step="0.1"></div>
+          <div class="f"><label for="x-bout">Shortest bout kept (s)</label><input id="x-bout" type="number" min="0" step="0.1"></div>
+        </div>
+        <p class="msg warn" id="resWarn" hidden></p>
+        <div class="tbl-wrap"><table id="resTbl"></table></div>
+        <div class="chart" id="traj" style="max-width:360px"></div>
+        <details>
+          <summary>How the numbers are calculated</summary>
+          <p class="help" style="margin-top:6px">Positions are smoothed with a moving average over the window above, within stretches where the bee is continuously detected (gaps up to the "longest gap" are bridged; longer gaps split the track and are not counted). <b>Tracked time</b> is the time inside those stretches. <b>Distance</b> sums the steps between smoothed positions; <b>mean speed</b> is distance ÷ tracked time; <b>moving</b> is the share of tracked time with speed above the threshold. Zone time is the share of tracked time the centroid was inside each zone; <b>visits</b> count entries. <b>Merges</b> count episodes when this bee touched another and had to be split from a shared blob; <b>reacquired</b> counts times it was lost for a while and matched again. After either, the bee's identity may have swapped with another bee, so with several unmarked bees, use the <b>All bees</b> row, which does not depend on identity.</p>
+        </details>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-label="Recordings">
+        <div class="row spread"><h2>Recordings</h2><button id="newRec">New recording</button></div>
+        <div class="recs" id="recs"></div>
+        <div class="fields">
+          <div class="f"><label for="r-label">Recording</label><input id="r-label"></div>
+          <div class="f"><label for="r-group">Group</label><input id="r-group" placeholder="e.g. Control"></div>
+          <div class="f"><label for="r-n">Bees in arena</label><input id="r-n" type="number" min="1" max="30" step="1"></div>
+        </div>
+        <p class="help" id="recVideo"></p>
+        <div class="row"><span id="delRecWrap"><button class="ghost" id="delRec">Delete recording</button></span></div>
+      </section>
+
+      <section class="panel" aria-label="Arena and zones">
+        <h2>Arena &amp; zones</h2>
+        <p class="help" id="arenaState"></p>
+        <div class="fields">
+          <div class="f"><label for="a-w">Arena width (mm)</label><input id="a-w" type="number" min="0" step="1" placeholder="sets the scale"></div>
+          <div class="f"><label for="a-h">Arena height (mm)</label><input id="a-h" type="number" min="0" step="1" placeholder="same as width"></div>
+          <div class="f"><label for="a-edge">Edge band (mm)</label><input id="a-edge" type="number" min="0" step="1" placeholder="off"></div>
+        </div>
+        <div class="zones" id="zones"></div>
+        <p class="help">Width and height are the real size of the box you drew around the arena. With an edge band set, results include time near the wall (thigmotaxis).</p>
+      </section>
+
+      <section class="panel" aria-label="Detection">
+        <h2>Detection</h2>
+        <div class="fields">
+          <div class="f"><label for="d-pol">Bees are</label><select id="d-pol"><option value="dark">darker than background</option><option value="light">lighter than background</option><option value="both">either</option></select></div>
+          <div class="f"><label for="d-proc">Processing size</label><select id="d-proc"><option value="320">320 px (fast)</option><option value="480">480 px</option><option value="640">640 px</option><option value="960">960 px (slow)</option></select></div>
+        </div>
+        <div class="f">
+          <label for="d-thr">Threshold: <span class="mono" id="d-thrv"></span> (difference from background, 0–255)</label>
+          <input id="d-thr" type="range" min="4" max="120" step="1">
+        </div>
+        <div class="checks"><label><input type="checkbox" id="d-open"> Remove specks (3×3 opening)</label></div>
+        <div class="row">
+          <button id="bTest">Test on this frame</button>
+          <button id="bMeasure" title="Use the median size of the blobs on this frame as the size of one bee">Measure bee size</button>
+          <button class="ghost" id="bBg" title="Rebuild the background image">Rebuild background</button>
+        </div>
+        <p class="msg" id="detMsg"></p>
+        <p class="help">The background is the per-pixel median of frames spread through the analysis range, so bees that keep moving disappear from it. A bee that sits still for most of the recording becomes part of the background and is missed.</p>
+      </section>
+
+      <section class="panel" aria-label="Tracking">
+        <h2>Tracking</h2>
+        <div class="fields">
+          <div class="f"><label for="t-0">Start (s)</label><div class="row" style="flex-wrap:nowrap"><input id="t-0" type="number" min="0" step="0.1"><button class="ghost" id="t-0now" title="Set to the current video time">now</button></div></div>
+          <div class="f"><label for="t-1">End (s)</label><div class="row" style="flex-wrap:nowrap"><input id="t-1" type="number" min="0" step="0.1" placeholder="end"><button class="ghost" id="t-1now" title="Set to the current video time">now</button></div></div>
+          <div class="f"><label for="t-hz">Samples per second</label><input id="t-hz" type="number" min="1" max="120" step="1"></div>
+          <div class="f"><label for="t-max">Max walking speed (<span class="u">mm</span>/s)</label><input id="t-max" type="number" min="1" step="5"></div>
+          <div class="f"><label for="t-method">Read frames by</label><select id="t-method"><option value="play">playing the video (fast)</option><option value="seek">seeking each sample (slow, no skips)</option></select></div>
+          <div class="f"><label for="t-rate">Playback speed while tracking</label><select id="t-rate"><option>1</option><option>2</option><option>4</option></select></div>
+        </div>
+        <div class="row"><button class="primary" id="bRun">Track bees</button><button id="bCancel" hidden>Cancel</button></div>
+        <div class="progress" id="prog" hidden><i></i></div>
+        <p class="msg" id="runMsg"></p>
+        <p class="help">Keep this tab visible while tracking: browsers pause video in hidden tabs.</p>
+      </section>
+
+      <section class="panel" aria-label="Data">
+        <h2>Data</h2>
+        <div class="row">
+          <button class="primary" id="xTracks">Tracks CSV</button>
+          <button class="primary" id="xSummary">Summary CSV</button>
+          <button id="xPer" title="Moving and zone bouts as behaviors, one PER Scorer bee per tracked bee">Export to PER Scorer</button>
+        </div>
+        <div class="row">
+          <button id="xJson">Save project (.json)</button>
+          <button id="iJson">Open project…</button>
+          <span id="newProjWrap"><button class="ghost" id="newProj">Start new project</button></span>
+          <input type="file" id="jsonFile" accept=".json,application/json" hidden>
+        </div>
+        <p class="help">Settings and results are kept in this browser, but browser storage can be cleared and long recordings may not fit. Save the project file at the end of each session.</p>
+      </section>
+
+      <section class="panel" aria-label="Shortcuts">
+        <h2>Shortcuts</h2>
+        <div class="hotkeys">
+          <kbd>Space</kbd><span>Play / pause</span>
+          <kbd>← →</kbd><span>Seek 1 s (Shift: 5 s)</span>
+          <kbd>, .</kbd><span>Step one frame back / forward</span>
+          <kbd>Esc</kbd><span>Stop drawing</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Compare recordings">
+    <div class="row spread"><h2>Compare recordings</h2><span class="help" id="cmpNote"></span></div>
+    <div class="row">
+      <label for="c-metric">Measure</label><select id="c-metric"></select>
+      <label for="c-unit">One point per</label><select id="c-unit"><option value="rec">recording (all bees pooled)</option><option value="bee">bee</option></select>
+    </div>
+    <div class="res-grid">
+      <div class="tbl-wrap"><table id="cmpTbl"></table></div>
+      <div class="chart" id="cmpChart"></div>
+    </div>
+    <p class="help">p-values: Mann–Whitney U for two groups, Kruskal–Wallis for three or more. They are exploratory. Bees that share an arena are not independent, and their identities can swap, so compare recordings rather than bees unless each arena held one bee or the bees were marked.</p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* Bee Tracker core: image processing, detection, tracking and metrics.
+   Pure functions with no DOM access, so they run in the page and in Node tests.
+   Coordinates: "proc" = processing image (arena crop, downscaled); "video" = source video pixels. */
+const BeeCore = (() => {
+'use strict';
+
+/* ---------- shapes (video pixel coords) ---------- */
+// shape: {type:'ellipse'|'rect', x, y, w, h} — bounding box of the arena or zone
+function inside(s, x, y){
+  if(!s) return false;
+  if(s.type === 'rect') return x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h;
+  const rx = s.w / 2, ry = s.h / 2; if(rx <= 0 || ry <= 0) return false;
+  const dx = (x - (s.x + rx)) / rx, dy = (y - (s.y + ry)) / ry;
+  return dx * dx + dy * dy <= 1;
+}
+// The shape shrunk by d on every side (for an "edge band" inside the arena wall).
+function inset(s, d){
+  return {type: s.type, x: s.x + d, y: s.y + d, w: Math.max(0, s.w - 2 * d), h: Math.max(0, s.h - 2 * d)};
+}
+
+/* ---------- processing geometry ---------- */
+// Crop the arena bounding box out of the video and scale it so its longer side is at most procMax.
+function procGeometry(arena, vw, vh, procMax){
+  const x0 = Math.max(0, Math.floor(arena.x)), y0 = Math.max(0, Math.floor(arena.y));
+  const x1 = Math.min(vw, Math.ceil(arena.x + arena.w)), y1 = Math.min(vh, Math.ceil(arena.y + arena.h));
+  const cw = Math.max(1, x1 - x0), ch = Math.max(1, y1 - y0);
+  const s = Math.min(1, procMax / Math.max(cw, ch));
+  const w = Math.max(1, Math.round(cw * s)), h = Math.max(1, Math.round(ch * s));
+  return {cx: x0, cy: y0, cw, ch, w, h, sx: w / cw, sy: h / ch};
+}
+const toVideo = (g, x, y) => [g.cx + x / g.sx, g.cy + y / g.sy];
+const toProc = (g, x, y) => [(x - g.cx) * g.sx, (y - g.cy) * g.sy];
+
+function shapeMask(shape, g){
+  const m = new Uint8Array(g.w * g.h);
+  for(let y = 0; y < g.h; y++) for(let x = 0; x < g.w; x++){
+    const [vx, vy] = toVideo(g, x + 0.5, y + 0.5);
+    if(inside(shape, vx, vy)) m[y * g.w + x] = 1;
+  }
+  return m;
+}
+
+/* ---------- pixels ---------- */
+function toLuma(rgba, n){
+  const out = new Uint8Array(n);
+  for(let i = 0, j = 0; i < n; i++, j += 4) out[i] = (rgba[j] * 77 + rgba[j + 1] * 150 + rgba[j + 2] * 29) >> 8;
+  return out;
+}
+function maskedMedian(img, mask){
+  const h = new Uint32Array(256); let n = 0;
+  for(let i = 0; i < img.length; i++) if(mask[i]){ h[img[i]]++; n++; }
+  if(!n) return 0;
+  let c = 0; const half = n / 2;
+  for(let v = 0; v < 256; v++){ c += h[v]; if(c >= half) return v; }
+  return 255;
+}
+// Per-pixel median of a stack of frames: removes bees that move during the recording.
+function medianBackground(frames){
+  const K = frames.length, n = frames[0].length, out = new Uint8Array(n), buf = new Uint8Array(K);
+  for(let i = 0; i < n; i++){
+    for(let k = 0; k < K; k++) buf[k] = frames[k][i];
+    buf.sort(); out[i] = K % 2 ? buf[K >> 1] : (buf[(K >> 1) - 1] + buf[K >> 1] + 1) >> 1;
+  }
+  return out;
+}
+// Pixels that differ from the background by at least thr, after matching overall brightness
+// (compensates auto-exposure and flicker). polarity: 'dark' (bees darker than background), 'light', 'both'.
+function foreground(img, bg, mask, polarity, thr, bgMed){
+  const off = bgMed == null ? 0 : bgMed - maskedMedian(img, mask);
+  const n = img.length, fg = new Uint8Array(n);
+  for(let i = 0; i < n; i++){
+    if(!mask[i]) continue;
+    const d = img[i] + off - bg[i];
+    const v = polarity === 'dark' ? -d : polarity === 'light' ? d : (d < 0 ? -d : d);
+    if(v >= thr) fg[i] = 1;
+  }
+  return {fg, offset: off};
+}
+// 3x3 binary opening (erode then dilate): removes isolated noise pixels and thin specks.
+function open3(m, w, h){
+  const a = new Uint8Array(m.length), b = new Uint8Array(m.length);
+  const pass = (src, dst, erode, horiz) => {
+    for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){
+      const i = y * w + x;
+      let p, q;
+      if(horiz){ p = x > 0 ? src[i - 1] : (erode ? 0 : 0); q = x < w - 1 ? src[i + 1] : 0; }
+      else { p = y > 0 ? src[i - w] : 0; q = y < h - 1 ? src[i + w] : 0; }
+      dst[i] = erode ? (src[i] & p & q) : (src[i] | p | q);
+    }
+  };
+  pass(m, a, true, true); pass(a, b, true, false);   // erode
+  pass(b, a, false, true); pass(a, b, false, false); // dilate
+  return b;
+}
+
+/* ---------- blobs ---------- */
+// 8-connected components. Each blob's pixels are stored contiguously in pix[start..end).
+function findBlobs(fg, w, h, minArea){
+  const lab = new Uint8Array(fg.length), pix = new Int32Array(fg.length), out = [];
+  let tail = 0;
+  for(let s = 0; s < fg.length; s++){
+    if(!fg[s] || lab[s]) continue;
+    const start = tail; let head = tail; pix[tail++] = s; lab[s] = 1;
+    let sx = 0, sy = 0;
+    while(head < tail){
+      const p = pix[head++], px = p % w, py = (p - px) / w;
+      sx += px; sy += py;
+      for(let dy = -1; dy <= 1; dy++){
+        const yy = py + dy; if(yy < 0 || yy >= h) continue;
+        for(let dx = -1; dx <= 1; dx++){
+          const xx = px + dx; if(xx < 0 || xx >= w) continue;
+          const q = yy * w + xx; if(fg[q] && !lab[q]){ lab[q] = 1; pix[tail++] = q; }
+        }
+      }
+    }
+    const area = tail - start;
+    if(area >= minArea) out.push({area, x: sx / area + 0.5, y: sy / area + 0.5, start, end: tail});
+    else tail = start; // reuse the space
+  }
+  return {blobs: out, pix};
+}
+// Split one blob into k parts with k-means on its pixel coordinates (for touching bees).
+function splitBlob(blob, pix, w, k, seeds){
+  const n = blob.end - blob.start;
+  const X = new Float32Array(n), Y = new Float32Array(n);
+  let mx = 0, my = 0;
+  for(let i = 0; i < n; i++){ const p = pix[blob.start + i]; X[i] = p % w + 0.5; Y[i] = Math.floor(p / w) + 0.5; mx += X[i]; my += Y[i]; }
+  mx /= n; my /= n;
+  let c;
+  if(seeds && seeds.length === k) c = seeds.map(s => [s[0], s[1]]);
+  else {
+    // seeds spread along the blob's long axis
+    let sxx = 0, syy = 0, sxy = 0;
+    for(let i = 0; i < n; i++){ const dx = X[i] - mx, dy = Y[i] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(th), uy = Math.sin(th);
+    const proj = Array.from({length: n}, (_, i) => (X[i] - mx) * ux + (Y[i] - my) * uy).sort((a, b) => a - b);
+    c = Array.from({length: k}, (_, j) => { const q = proj[Math.min(n - 1, Math.floor((j + 0.5) / k * n))]; return [mx + q * ux, my + q * uy]; });
+  }
+  const asg = new Int32Array(n);
+  for(let it = 0; it < 12; it++){
+    const sum = c.map(() => [0, 0, 0]);
+    for(let i = 0; i < n; i++){
+      let best = 0, bd = Infinity;
+      for(let j = 0; j < k; j++){ const d = (X[i] - c[j][0]) ** 2 + (Y[i] - c[j][1]) ** 2; if(d < bd){ bd = d; best = j; } }
+      asg[i] = best; sum[best][0] += X[i]; sum[best][1] += Y[i]; sum[best][2]++;
+    }
+    let moved = 0;
+    for(let j = 0; j < k; j++) if(sum[j][2]){ const nx = sum[j][0] / sum[j][2], ny = sum[j][1] / sum[j][2]; moved += Math.abs(nx - c[j][0]) + Math.abs(ny - c[j][1]); c[j] = [nx, ny]; }
+    if(moved < 0.05) break;
+  }
+  const area = new Array(k).fill(0); for(let i = 0; i < n; i++) area[asg[i]]++;
+  return c.map((p, j) => ({x: p[0], y: p[1], area: area[j]})).filter(d => d.area > 0);
+}
+
+/* ---------- detection ---------- */
+// opt: {polarity, thr, open, beeArea, minFrac, maxFrac, n}
+// predictions: [[x,y],...] proc coords of where tracked bees are expected (to judge how many share a merged blob)
+function detect(img, bg, mask, g, opt, bgMed, predictions){
+  const {fg} = foreground(img, bg, mask, opt.polarity, opt.thr, bgMed);
+  const m = opt.open ? open3(fg, g.w, g.h) : fg;
+  const minArea = opt.beeArea ? Math.max(2, opt.beeArea * opt.minFrac) : 4;
+  const {blobs, pix} = findBlobs(m, g.w, g.h, minArea);
+  const dets = [];
+  blobs.sort((a, b) => b.area - a.area);
+  for(const b of blobs){
+    let k = 1;
+    if(opt.beeArea && opt.n > 1 && b.area > opt.beeArea * opt.maxFrac){
+      k = Math.round(b.area / opt.beeArea);
+      // bees predicted to be inside this blob's extent also count
+      if(predictions && predictions.length){
+        const r = Math.sqrt(b.area / Math.PI) + Math.sqrt(opt.beeArea / Math.PI);
+        const near = predictions.filter(p => (p[0] - b.x) ** 2 + (p[1] - b.y) ** 2 <= r * r);
+        k = Math.max(k, near.length);
+        if(near.length === k && k > 1){
+          splitBlob(b, pix, g.w, k, near).forEach(d => dets.push({...d, merged: true}));
+          continue;
+        }
+      }
+      k = Math.max(2, Math.min(opt.n, k));
+      splitBlob(b, pix, g.w, k).forEach(d => dets.push({...d, merged: true}));
+      continue;
+    }
+    dets.push({x: b.x, y: b.y, area: b.area, merged: false});
+  }
+  return {dets, fg: m, blobs};
+}
+// Typical single-bee area from blobs on one frame (median of blob areas).
+function estimateBeeArea(blobs){
+  if(!blobs.length) return null;
+  const a = blobs.map(b => b.area).sort((x, y) => x - y);
+  return a[Math.floor((a.length - 1) / 2)];
+}
+
+/* ---------- assignment ---------- */
+// Hungarian algorithm (min-cost). cost: n x m with n <= m. Returns column for each row.
+function hungarian(cost){
+  const n = cost.length, m = cost[0].length;
+  const u = new Float64Array(n + 1), v = new Float64Array(m + 1), p = new Int32Array(m + 1), way = new Int32Array(m + 1);
+  for(let i = 1; i <= n; i++){
+    p[0] = i; let j0 = 0;
+    const minv = new Float64Array(m + 1).fill(Infinity), used = new Uint8Array(m + 1);
+    do{
+      used[j0] = 1; const i0 = p[j0]; let delta = Infinity, j1 = 0;
+      for(let j = 1; j <= m; j++) if(!used[j]){
+        const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+        if(cur < minv[j]){ minv[j] = cur; way[j] = j0; }
+        if(minv[j] < delta){ delta = minv[j]; j1 = j; }
+      }
+      for(let j = 0; j <= m; j++){ if(used[j]){ u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
+      j0 = j1;
+    } while(p[j0] !== 0);
+    do{ const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while(j0);
+  }
+  const ans = new Int32Array(n).fill(-1);
+  for(let j = 1; j <= m; j++) if(p[j]) ans[p[j] - 1] = j - 1;
+  return ans;
+}
+// Returns [row, col] pairs with cost < big.
+function assign(cost, big){
+  const n = cost.length; if(!n) return []; const m = cost[0].length; if(!m) return [];
+  const pairs = [];
+  if(n <= m){ hungarian(cost).forEach((j, i) => { if(j >= 0 && cost[i][j] < big) pairs.push([i, j]); }); }
+  else {
+    const t = Array.from({length: m}, (_, j) => Array.from({length: n}, (_, i) => cost[i][j]));
+    hungarian(t).forEach((i, j) => { if(i >= 0 && cost[i][j] < big) pairs.push([i, j]); });
+  }
+  return pairs;
+}
+
+/* ---------- tracking ---------- */
+// opt: {n: number of bees, maxSpeed: proc px per s, gate0: proc px, reacquireAfter: s}
+function createTracker(opt){
+  const BIG = 1e9, tracks = [];
+  let nextId = 1;
+  function predict(tr, t){ const dt = Math.min(t - tr.tSeen, 0.5); return [tr.x + tr.vx * dt, tr.y + tr.vy * dt]; }
+  function predictions(t){ return tracks.map(tr => predict(tr, t)); }
+  function step(t, dets){
+    const res = new Map();
+    const cost = tracks.map(tr => {
+      const [px, py] = predict(tr, t), gate = opt.gate0 + opt.maxSpeed * Math.max(0, t - tr.tSeen);
+      return dets.map(d => { const c = Math.hypot(d.x - px, d.y - py); return c <= gate ? c : BIG; });
+    });
+    const pairs = tracks.length && dets.length ? assign(cost, BIG) : [];
+    const usedT = new Set(), usedD = new Set();
+    const update = (tr, d, reacq) => {
+      const dt = t - tr.tSeen;
+      // A position split out of a merged blob is rough, so the bee keeps its previous velocity through contact.
+      if(reacq || dt > 0.5){ tr.vx = 0; tr.vy = 0; }
+      else if(dt > 0 && !d.merged){ tr.vx = 0.5 * (d.x - tr.x) / dt + 0.5 * tr.vx; tr.vy = 0.5 * (d.y - tr.y) / dt + 0.5 * tr.vy; }
+      tr.x = d.x; tr.y = d.y; tr.tSeen = t;
+      res.set(tr.id, {x: d.x, y: d.y, area: d.area, det: true, merged: !!d.merged, reacq: !!reacq});
+    };
+    pairs.forEach(([i, j]) => { usedT.add(i); usedD.add(j); update(tracks[i], dets[j], false); });
+    let freeD = dets.map((d, j) => j).filter(j => !usedD.has(j)).sort((a, b) => dets[b].area - dets[a].area);
+    // new bees appear until all n are being tracked
+    while(tracks.length < opt.n && freeD.length){
+      const j = freeD.shift(), d = dets[j];
+      const tr = {id: nextId++, x: d.x, y: d.y, vx: 0, vy: 0, tSeen: t};
+      tracks.push(tr); usedT.add(tracks.length - 1);
+      res.set(tr.id, {x: d.x, y: d.y, area: d.area, det: true, merged: !!d.merged, reacq: false});
+    }
+    // a bee lost for a while is matched to the nearest leftover blob (identity uncertain)
+    tracks.forEach((tr, i) => {
+      if(usedT.has(i) || !freeD.length || t - tr.tSeen < opt.reacquireAfter) return;
+      let best = -1, bd = Infinity;
+      freeD.forEach((j, k) => { const d = Math.hypot(dets[j].x - tr.x, dets[j].y - tr.y); if(d < bd){ bd = d; best = k; } });
+      const j = freeD.splice(best, 1)[0]; usedT.add(i); update(tr, dets[j], true);
+    });
+    return {rows: tracks.map(tr => res.get(tr.id) || {x: null, y: null, area: 0, det: false, merged: false, reacq: false}),
+      ids: tracks.map(tr => tr.id), extra: freeD.length};
+  }
+  return {step, predictions, get count(){ return tracks.length; }};
+}
+
+/* ---------- metrics ---------- */
+// samples: {t:[], x:[], y:[], det:[]} in video px for one bee. opt: {scale:{sx,sy}|null (mm per px),
+// smooth: s, maxGap: s, moveThr: units/s, zones:[{name, shape}], minBout: s}
+function segments(t, det, maxGap){
+  const segs = []; let cur = null;
+  for(let i = 0; i < t.length; i++){
+    if(!det[i]){ continue; }
+    if(cur && t[i] - t[cur[cur.length - 1]] <= maxGap) cur.push(i);
+    else { cur = [i]; segs.push(cur); }
+  }
+  return segs;
+}
+function smoothSeg(t, v, seg, half){
+  const out = new Array(seg.length);
+  let lo = 0, hi = 0, sum = 0;
+  for(let k = 0; k < seg.length; k++){
+    const tk = t[seg[k]];
+    while(hi < seg.length && t[seg[hi]] <= tk + half + 1e-9){ sum += v[seg[hi]]; hi++; }
+    while(t[seg[lo]] < tk - half - 1e-9){ sum -= v[seg[lo]]; lo++; }
+    out[k] = sum / (hi - lo);
+  }
+  return out;
+}
+function runsFrom(steps, minBout, mergeGap){
+  // steps: [{t0, t1, on}] in time order -> merged on-runs [[t0,t1]]
+  const runs = [];
+  steps.forEach(s => {
+    if(!s.on) return;
+    const last = runs[runs.length - 1];
+    if(last && s.t0 - last[1] <= mergeGap) last[1] = s.t1; else runs.push([s.t0, s.t1]);
+  });
+  return runs.filter(r => r[1] - r[0] >= minBout);
+}
+function metrics(sm, opt){
+  const {t, det} = sm, sc = opt.scale, ux = sc ? sc.sx : 1, uy = sc ? sc.sy : 1;
+  const segs = segments(t, det, opt.maxGap);
+  const zones = opt.zones || [];
+  let dist = 0, tracked = 0, moving = 0;
+  const zt = zones.map(() => 0), visits = zones.map(() => 0), speeds = [];
+  const mvSteps = [], zSteps = zones.map(() => []);
+  const sx = new Array(t.length).fill(null), sy = new Array(t.length).fill(null), spd = new Array(t.length).fill(null);
+  segs.forEach(seg => {
+    const xs = smoothSeg(t, sm.x, seg, opt.smooth / 2), ys = smoothSeg(t, sm.y, seg, opt.smooth / 2);
+    seg.forEach((i, k) => { sx[i] = xs[k]; sy[i] = ys[k]; });
+    const inZ = zones.map(() => false);
+    for(let k = 0; k < seg.length; k++){
+      const zNow = zones.map(z => z.test ? z.test(xs[k], ys[k]) : inside(z.shape, xs[k], ys[k]));
+      zNow.forEach((v, z) => { if(v && !inZ[z]) visits[z]++; inZ[z] = v; });
+      if(k === seg.length - 1) break;
+      const dt = t[seg[k + 1]] - t[seg[k]]; if(dt <= 0) continue;
+      const d = Math.hypot((xs[k + 1] - xs[k]) * ux, (ys[k + 1] - ys[k]) * uy), v = d / dt;
+      dist += d; tracked += dt; speeds.push(v); spd[seg[k]] = v;
+      const on = v >= opt.moveThr; if(on) moving += dt;
+      mvSteps.push({t0: t[seg[k]], t1: t[seg[k + 1]], on});
+      zNow.forEach((inz, z) => { if(inz) zt[z] += dt; zSteps[z].push({t0: t[seg[k]], t1: t[seg[k + 1]], on: inz}); });
+    }
+  });
+  const nDet = det.reduce((a, b) => a + (b ? 1 : 0), 0);
+  const sorted = speeds.slice().sort((a, b) => a - b);
+  const span = t.length > 1 ? t[t.length - 1] - t[0] : 0;
+  const mb = opt.minBout ?? 0.3, mg = opt.mergeGap ?? 0.3;
+  return {
+    span, tracked, coverage: t.length ? nDet / t.length : 0, distance: dist,
+    meanSpeed: tracked > 0 ? dist / tracked : null,
+    p95Speed: sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(0.95 * (sorted.length - 1)))] : null,
+    fracMoving: tracked > 0 ? moving / tracked : null, movingTime: moving,
+    zones: zones.map((z, i) => ({name: z.name, time: zt[i], frac: tracked > 0 ? zt[i] / tracked : null, visits: visits[i]})),
+    runs: {moving: runsFrom(mvSteps, mb, mg), zones: zSteps.map(s => runsFrom(s, mb, mg))},
+    smooth: {x: sx, y: sy, speed: spd},
+  };
+}
+// Mean distance from each bee to its nearest neighbour, over samples where both are detected.
+function nearestNeighbour(tracks, scale){
+  const ux = scale ? scale.sx : 1, uy = scale ? scale.sy : 1, n = tracks.length;
+  if(n < 2) return tracks.map(() => null);
+  const sum = new Array(n).fill(0), cnt = new Array(n).fill(0), len = tracks[0].x.length;
+  for(let i = 0; i < len; i++) for(let a = 0; a < n; a++){
+    if(!tracks[a].det[i]) continue;
+    let best = Infinity;
+    for(let b = 0; b < n; b++) if(b !== a && tracks[b].det[i]) best = Math.min(best, Math.hypot((tracks[a].x[i] - tracks[b].x[i]) * ux, (tracks[a].y[i] - tracks[b].y[i]) * uy));
+    if(best < Infinity){ sum[a] += best; cnt[a]++; }
+  }
+  return sum.map((s, a) => cnt[a] ? s / cnt[a] : null);
+}
+// Count separate merge episodes (runs of merged samples).
+function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && !prev) n++; prev = !!f; }); return n; }
+
+return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
+  findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes};
+})();
+if(typeof module !== 'undefined') module.exports = BeeCore;
+
+</script>
+<script>
+(() => {
+'use strict';
+const C = BeeCore;
+const $ = id => document.getElementById(id);
+const STORE = 'bee-tracker-v1';
+const COLORS = ['#2a78d6','#eb6834','#1baf7a','#d23f8f','#8b5cf6','#0e9aa7','#a16207','#e34948','#4d7c0f','#64748b'];
+const ZCOL = ['#e0a100','#0e9aa7','#d23f8f','#4d7c0f','#7c3aed','#c2410c'];
+const uid = () => Math.random().toString(36).slice(2, 9);
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = t => { if(t == null || isNaN(t)) return '—'; const m = Math.floor(t / 60), s = t - m * 60; return String(m).padStart(2, '0') + ':' + s.toFixed(2).padStart(5, '0'); };
+const r1 = v => Math.round(v * 10) / 10;
+
+/* ---------- state ---------- */
+function defaults(){
+  return {
+    nBees: 1, arena: null, arenaWmm: null, arenaHmm: null, edgeMm: null, zones: [],
+    det: {polarity: 'dark', thr: 30, open: true, beeAreaVid: null, minFrac: 0.3, maxFrac: 1.6, procMax: 480, bgFrames: 25},
+    trk: {hz: 15, maxSpeed: 60, t0: 0, t1: null, method: 'play', rate: 2, reacq: 1},
+    met: {smooth: 0.2, moveThr: 3, maxGap: 0.5, minBout: 0.3},
+  };
+}
+function newRec(from){
+  return {id: uid(), label: 'Recording ' + (S ? S.recs.length + 1 : 1), group: from ? from.group : '', videoName: '', vw: 0, vh: 0, duration: null,
+    cfg: from ? Object.assign(clone(from.cfg), {trk: Object.assign(clone(from.cfg.trk), {t0: 0, t1: null})}) : defaults(), result: null};
+}
+function emptyState(){
+  const s = {kind: 'bee-tracker-project', version: 1, session: {experimenter: '', date: new Date().toISOString().slice(0, 10), experiment: ''}, recs: [], current: null};
+  return s;
+}
+let S = null;
+S = load() || emptyState();
+if(!S.recs.length){ const r = newRec(); S.recs.push(r); S.current = r.id; }
+function migrate(s){
+  s.recs.forEach(r => { const d = defaults(); r.cfg = Object.assign(d, r.cfg); ['det','trk','met'].forEach(k => r.cfg[k] = Object.assign(defaults()[k], r.cfg[k])); });
+  if(!s.recs.find(r => r.id === s.current)) s.current = s.recs[0]?.id;
+  return s;
+}
+S = migrate(S);
+function load(){ try{ const s = JSON.parse(localStorage.getItem(STORE)); return s && s.recs ? s : null; }catch(e){ return null; } }
+let saveT, warnedQuota = false;
+function save(){ clearTimeout(saveT); saveT = setTimeout(() => { try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){ if(!warnedQuota){ warnedQuota = true; toast('Too much data to keep in browser storage. Save the project file.'); } } }, 400); }
+const rec = () => S.recs.find(r => r.id === S.current);
+const cfg = () => rec().cfg;
+
+/* ---------- scale and units ---------- */
+function scaleOf(r){
+  const c = r.cfg; if(!c.arena || !(c.arenaWmm > 0)) return null;
+  return {sx: c.arenaWmm / c.arena.w, sy: (c.arenaHmm > 0 ? c.arenaHmm : c.arenaWmm) / c.arena.h};
+}
+const unitOf = r => scaleOf(r) ? 'mm' : 'px';
+function zoneList(r){
+  const c = r.cfg, z = c.zones.map(z => ({name: z.name, shape: z.shape}));
+  const sc = scaleOf(r);
+  if(c.arena && c.edgeMm > 0 && sc){
+    const inner = {type: c.arena.type, x: c.arena.x + c.edgeMm / sc.sx, y: c.arena.y + c.edgeMm / sc.sy, w: c.arena.w - 2 * c.edgeMm / sc.sx, h: c.arena.h - 2 * c.edgeMm / sc.sy};
+    z.push({name: 'Edge', edge: true, inner, test: (x, y) => C.inside(c.arena, x, y) && !C.inside(inner, x, y)});
+  }
+  return z;
+}
+
+/* ---------- video ---------- */
+const vid = $('vid'), stage = $('stage'), ov = $('ov'), octx = ov.getContext('2d');
+let hasVideo = false, videoName = '', busy = null;
+function srcMsg(t){ $('srcMsg').textContent = t || ''; $('srcMsg').hidden = !t; }
+function loadSrc(src, name, failText, cors){
+  srcMsg(''); preview = null;
+  if(cors) vid.crossOrigin = 'anonymous'; else vid.removeAttribute('crossorigin');
+  vid.src = src; videoName = name; hasVideo = true;
+  vid.onloadedmetadata = () => {
+    let r = rec();
+    if(r.result && r.videoName && r.videoName !== name){
+      const other = S.recs.find(x => x.videoName === name);
+      if(other) S.current = other.id;
+      else { const nr = newRec(r); S.recs.push(nr); S.current = nr.id; toast('New recording for ' + name + ' (settings copied)'); }
+      r = rec();
+    }
+    r.videoName = name; r.vw = vid.videoWidth; r.vh = vid.videoHeight; r.duration = isFinite(vid.duration) ? vid.duration : null;
+    bgCache = null; changed(); toast('Loaded ' + name);
+  };
+  vid.onerror = () => { closeVideo(); srcMsg(failText); };
+  renderAll();
+}
+function openVideo(file){
+  if(!file || !file.type.startsWith('video')){ toast('That file is not a video.'); return; }
+  loadSrc(URL.createObjectURL(file), file.name, 'This browser cannot play ' + file.name + '. Try an MP4 (H.264) file.', false);
+}
+function openVideoUrl(raw){
+  let u; try{ u = new URL(String(raw).trim()); }catch(e){ srcMsg('That is not a complete link. It should start with https://'); return; }
+  if(!/^https?:$/.test(u.protocol)){ srcMsg('Only http and https links can be loaded.'); return; }
+  const name = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname);
+  loadSrc(u.href, name, 'Could not load that link for tracking. The site has to serve the video file itself and allow other pages to read it (CORS). Download the video and open it as a file instead.', true);
+}
+function closeVideo(){ vid.pause(); vid.removeAttribute('src'); vid.load(); hasVideo = false; videoName = ''; preview = null; bgCache = null; renderAll(); }
+$('pickVid').onclick = () => $('vidFile').click();
+$('vidFile').onchange = e => { openVideo(e.target.files[0]); e.target.value = ''; };
+$('urlForm').onsubmit = e => { e.preventDefault(); if($('vidUrl').value.trim()) openVideoUrl($('vidUrl').value); };
+$('bCloseVid').onclick = closeVideo;
+stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('over'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('over'));
+stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('over'); const f = e.dataTransfer.files[0]; if(f) openVideo(f); });
+const ready = () => hasVideo && vid.readyState >= 1 && vid.videoWidth > 0;
+
+/* transport */
+function setTime(t){ if(!ready()) return; vid.currentTime = Math.max(0, Math.min(vid.duration || 0, t)); }
+function togglePlay(){ if(!ready() || busy) return; if(vid.paused) vid.play(); else vid.pause(); }
+const fpsStep = () => 1 / (+$('fps').value || 30);
+function nudge(d){ if(busy) return; vid.pause(); setTime(vid.currentTime + d); }
+$('bPlay').onclick = togglePlay;
+$('bBack1').onclick = () => nudge(-1); $('bFwd1').onclick = () => nudge(1);
+$('bFrmB').onclick = () => nudge(-fpsStep()); $('bFrmF').onclick = () => nudge(fpsStep());
+$('rate').onchange = e => { vid.playbackRate = +e.target.value; };
+$('seek').oninput = e => { if(!busy) setTime(+e.target.value * (vid.duration || 0)); };
+vid.addEventListener('play', renderTransport); vid.addEventListener('pause', renderTransport);
+vid.addEventListener('seeked', () => { if(!busy && $('vMask').checked) testFrame(true); draw(); });
+function renderTransport(){
+  $('bPlay').textContent = vid.paused ? 'Play' : 'Pause';
+  ['bPlay','bBack1','bFwd1','bFrmB','bFrmF'].forEach(id => $(id).disabled = !hasVideo || !!busy);
+  $('seek').disabled = !hasVideo || !!busy;
+  $('bCloseVid').hidden = !hasVideo;
+  $('stageHint').hidden = hasVideo;
+  $('dur').textContent = hasVideo && isFinite(vid.duration) ? '/ ' + fmt(vid.duration) : '';
+}
+
+/* ---------- overlay geometry ---------- */
+function contentRect(){
+  const W = stage.clientWidth, H = stage.clientHeight, vw = vid.videoWidth || 16, vh = vid.videoHeight || 9;
+  const k = Math.min(W / vw, H / vh);
+  return {ox: (W - vw * k) / 2, oy: (H - vh * k) / 2, k};
+}
+const v2c = (x, y, R) => [R.ox + x * R.k, R.oy + y * R.k];
+function c2v(ev){ const b = ov.getBoundingClientRect(), R = contentRect(); return [(ev.clientX - b.left - R.ox) / R.k, (ev.clientY - b.top - R.oy) / R.k]; }
+function pathShape(ctx, s, R){
+  const [x, y] = v2c(s.x, s.y, R), w = s.w * R.k, h = s.h * R.k;
+  ctx.beginPath();
+  if(s.type === 'rect') ctx.rect(x, y, w, h); else ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
+}
+
+/* ---------- drawing arena and zones ---------- */
+let drawMode = null, drag = null;
+function setDrawMode(m){
+  drawMode = drawMode === m ? null : m; drag = null;
+  stage.classList.toggle('drawing', !!drawMode);
+  $('bArena').classList.toggle('on', drawMode === 'arena'); $('bZone').classList.toggle('on', drawMode === 'zone');
+  renderDrawHelp(); draw();
+}
+function renderDrawHelp(){
+  const c = cfg();
+  $('drawHelp').innerHTML = drawMode === 'arena' ? 'Drag a box around the <b>floor</b> of the arena. Esc cancels.'
+    : drawMode === 'zone' ? 'Drag a box to add a zone inside the arena. Esc stops.'
+    : !hasVideo ? 'Open a video to start.'
+    : !c.arena ? 'Draw the arena first: press <b>Draw arena</b>, then drag a box around the floor of the arena on the video.'
+    : !c.det.beeAreaVid ? 'Next: pause on a frame where every bee is visible and apart, press <b>Test on this frame</b>, adjust the threshold, then <b>Measure bee size</b>.'
+    : 'Ready to track. Zones can be added or changed after tracking; results update without tracking again.';
+}
+$('bArena').onclick = () => { if(!ready()) return toast('Open a video first.'); setDrawMode('arena'); };
+$('bZone').onclick = () => { if(!ready()) return toast('Open a video first.'); if(!cfg().arena) return toast('Draw the arena first.'); setDrawMode('zone'); };
+$('arenaShape').onchange = e => { const c = cfg(); if(c.arena){ c.arena.type = e.target.value; invalidateBg(); changed(); } };
+ov.addEventListener('pointerdown', ev => {
+  if(!drawMode){ togglePlay(); return; }
+  ov.setPointerCapture(ev.pointerId); const p = c2v(ev); drag = {x0: p[0], y0: p[1], x1: p[0], y1: p[1]}; draw();
+});
+ov.addEventListener('pointermove', ev => { if(!drag) return; const p = c2v(ev); drag.x1 = p[0]; drag.y1 = p[1]; draw(); });
+ov.addEventListener('pointerup', () => {
+  if(!drag) return;
+  const vw = vid.videoWidth, vh = vid.videoHeight, cl = (v, m) => Math.max(0, Math.min(m, v));
+  const x0 = cl(Math.min(drag.x0, drag.x1), vw), x1 = cl(Math.max(drag.x0, drag.x1), vw), y0 = cl(Math.min(drag.y0, drag.y1), vh), y1 = cl(Math.max(drag.y0, drag.y1), vh);
+  drag = null;
+  if(x1 - x0 < 8 || y1 - y0 < 8){ draw(); return; }
+  const c = cfg();
+  if(drawMode === 'arena'){
+    c.arena = {type: $('arenaShape').value, x: r1(x0), y: r1(y0), w: r1(x1 - x0), h: r1(y1 - y0)};
+    invalidateBg(); setDrawMode(null); toast('Arena set. Enter its real width in mm to get distances in mm.');
+  } else if(drawMode === 'zone'){
+    const used = new Set(c.zones.map(z => z.name)); let i = 0; while(used.has('Zone ' + String.fromCharCode(65 + i))) i++;
+    c.zones.push({id: uid(), name: 'Zone ' + String.fromCharCode(65 + i), shape: {type: $('zoneShape').value, x: r1(x0), y: r1(y0), w: r1(x1 - x0), h: r1(y1 - y0)}});
+  }
+  changed();
+});
+
+/* ---------- frame grabbing ---------- */
+const wc = document.createElement('canvas'), wctx = wc.getContext('2d', {willReadFrequently: true});
+function geometry(r){ return C.procGeometry(r.cfg.arena, r.vw || vid.videoWidth, r.vh || vid.videoHeight, r.cfg.det.procMax); }
+function grab(g){
+  if(wc.width !== g.w || wc.height !== g.h){ wc.width = g.w; wc.height = g.h; }
+  wctx.drawImage(vid, g.cx, g.cy, g.cw, g.ch, 0, 0, g.w, g.h);
+  let data;
+  try{ data = wctx.getImageData(0, 0, g.w, g.h).data; }
+  catch(e){ throw new Error('The browser will not let this page read pixels from this video (it came from another site). Download the video and open it as a file.'); }
+  return C.toLuma(data, g.w * g.h);
+}
+function seekTo(t){
+  return new Promise(res => {
+    let done = false; const fin = () => { if(done) return; done = true; vid.removeEventListener('seeked', fin); clearTimeout(to); res(); };
+    const to = setTimeout(fin, 4000); vid.addEventListener('seeked', fin);
+    vid.currentTime = t;
+  });
+}
+function range(r){
+  const d = r.duration || vid.duration || 0, t0 = Math.max(0, Math.min(d, +r.cfg.trk.t0 || 0));
+  const t1 = r.cfg.trk.t1 > 0 ? Math.min(d, r.cfg.trk.t1) : d;
+  return [t0, Math.max(t0, t1)];
+}
+
+/* ---------- background ---------- */
+let bgCache = null;
+function bgKey(r){ const c = r.cfg; return JSON.stringify([r.id, videoName, c.arena, c.det.procMax, range(r), c.det.bgFrames]); }
+function invalidateBg(){ bgCache = null; preview = null; }
+async function ensureBackground(r, onProg){
+  const key = bgKey(r);
+  if(bgCache && bgCache.key === key) return bgCache;
+  const g = geometry(r), mask = C.shapeMask(r.cfg.arena, g), [t0, t1] = range(r), K = r.cfg.det.bgFrames, frames = [];
+  const back = vid.currentTime; vid.pause();
+  for(let k = 0; k < K; k++){
+    await seekTo(t0 + (k + 0.5) / K * (t1 - t0)); frames.push(grab(g));
+    if(onProg) onProg((k + 1) / K);
+  }
+  await seekTo(back);
+  const bg = C.medianBackground(frames);
+  bgCache = {key, g, mask, bg, bgMed: C.maskedMedian(bg, mask)};
+  return bgCache;
+}
+$('bBg').onclick = async () => { if(!checkReady(false)) return; invalidateBg(); await withBusy('Building background', async () => { await ensureBackground(rec(), p => setProg(p)); }); if(hasVideo) testFrame(true); };
+
+function detOpts(r, g){
+  const d = r.cfg.det;
+  return {polarity: d.polarity, thr: d.thr, open: d.open, minFrac: d.minFrac, maxFrac: d.maxFrac, n: r.cfg.nBees,
+    beeArea: d.beeAreaVid ? d.beeAreaVid * g.sx * g.sy : null};
+}
+
+/* ---------- test detection on the current frame ---------- */
+let preview = null;
+async function testFrame(quiet){
+  if(!checkReady(quiet)) return;
+  const r = rec();
+  try{
+    const B = bgCache && bgCache.key === bgKey(r) ? bgCache : await withBusy('Building background', () => ensureBackground(r, p => setProg(p)));
+    if(!B) return;
+    const img = grab(B.g), res = C.detect(img, B.bg, B.mask, B.g, detOpts(r, B.g), B.bgMed, null);
+    preview = {t: vid.currentTime, g: B.g, fg: res.fg, dets: res.dets, blobs: res.blobs};
+    const n = res.blobs.length, areas = res.blobs.map(b => Math.round(b.area / (B.g.sx * B.g.sy)));
+    const want = r.cfg.nBees;
+    let m = `${n} blob${n === 1 ? '' : 's'} on this frame` + (n ? ` (areas ${areas.slice(0, 8).join(', ')}${n > 8 ? ', …' : ''} px²)` : '') + '.';
+    let cls = 'msg';
+    if(n !== want){ cls = 'msg warn'; m += ` The recording has ${want} bee${want === 1 ? '' : 's'}: ` + (n > want ? 'raise the threshold or turn on Remove specks if specks or shadows show up.' : 'lower the threshold, or pick a frame where the bees are apart.'); }
+    $('detMsg').className = cls; $('detMsg').textContent = m;
+    if(!$('vMask').checked){ $('vMask').checked = true; }
+    draw();
+  }catch(e){ $('detMsg').className = 'msg bad'; $('detMsg').textContent = e.message; }
+}
+$('bTest').onclick = () => testFrame(false);
+$('bMeasure').onclick = async () => {
+  await testFrame(false); if(!preview) return;
+  const r = rec(), a = C.estimateBeeArea(preview.blobs);
+  if(!a){ toast('No blobs on this frame to measure.'); return; }
+  const n = preview.blobs.length;
+  r.cfg.det.beeAreaVid = Math.round(a / (preview.g.sx * preview.g.sy));
+  changed();
+  $('detMsg').className = n === r.cfg.nBees ? 'msg good' : 'msg warn';
+  $('detMsg').textContent = `One bee ≈ ${r.cfg.det.beeAreaVid} px² (median of ${n} blob${n === 1 ? '' : 's'}).` + (n === r.cfg.nBees ? '' : ` That is not the ${r.cfg.nBees} bees this recording should have, so the size may be off; measure again on a better frame.`);
+};
+function checkReady(quiet){
+  const say = t => { if(!quiet) toast(t); return false; };
+  if(!ready()) return say('Open a video first.');
+  if(!cfg().arena) return say('Draw the arena first.');
+  if(busy) return false;
+  return true;
+}
+
+/* ---------- busy / progress ---------- */
+function setProg(p){ $('prog').hidden = false; $('prog').firstElementChild.style.width = Math.round(Math.max(0, Math.min(1, p)) * 100) + '%'; }
+async function withBusy(label, fn){
+  if(busy) return null;
+  busy = {label, cancel: false}; $('runMsg').className = 'msg'; $('runMsg').textContent = label + '…'; renderBusy();
+  try{ return await fn(); }
+  catch(e){ $('runMsg').className = 'msg bad'; $('runMsg').textContent = e.message || String(e); return null; }
+  finally{ busy = null; $('prog').hidden = true; renderBusy(); if($('runMsg').textContent === label + '…') $('runMsg').textContent = ''; }
+}
+function renderBusy(){
+  ['bRun','bTest','bMeasure','bBg','bArena','bZone','pickVid','newRec','iJson','newProj'].forEach(id => $(id).disabled = !!busy);
+  $('bCancel').hidden = !busy; renderTransport();
+}
+$('bCancel').onclick = () => { if(busy) busy.cancel = true; };
+
+/* ---------- tracking ---------- */
+function playLoop(t0, t1, hz, rate, onFrame){
+  return new Promise(async resolve => {
+    vid.pause(); await seekTo(t0);
+    vid.muted = true; vid.playbackRate = rate;
+    let last = -Infinity, finished = false, err = null;
+    const finish = () => { if(finished) return; finished = true; vid.pause(); vid.playbackRate = +$('rate').value; vid.removeEventListener('ended', finish); resolve(err); };
+    const cb = (now, meta) => {
+      if(finished) return;
+      const t = meta.mediaTime;
+      if(busy.cancel || t >= t1){ finish(); return; }
+      if(t >= t0 && t - last >= 0.75 / hz){ last = t; try{ onFrame(t); }catch(e){ err = e; finish(); return; } }
+      vid.requestVideoFrameCallback(cb);
+    };
+    vid.requestVideoFrameCallback(cb);
+    vid.addEventListener('ended', finish);
+    vid.play().catch(e => { err = e; finish(); });
+  });
+}
+async function seekLoop(t0, t1, hz, onFrame){
+  vid.pause();
+  for(let k = 0; ; k++){
+    const t = t0 + k / hz; if(t >= t1 || busy.cancel) break;
+    await seekTo(t); onFrame(vid.currentTime);
+  }
+  return null;
+}
+$('bRun').onclick = async () => {
+  if(!checkReady(false)) return;
+  const r = rec(), c = r.cfg;
+  if(c.nBees > 1 && !c.det.beeAreaVid){ toast('Measure the bee size first: it is needed to split bees that touch.'); return; }
+  const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  const started = performance.now();
+  const out = await withBusy('Tracking', async () => {
+    const B = await ensureBackground(r, p => setProg(0.1 * p));
+    const g = B.g, opts = detOpts(r, g), sc = scaleOf(r), [t0, t1] = range(r);
+    if(t1 - t0 < 0.5) throw new Error('The analysis range is shorter than half a second. Check Start and End.');
+    const pxPerS = sc ? c.trk.maxSpeed / ((sc.sx + sc.sy) / 2) * ((g.sx + g.sy) / 2) : 0.6 * Math.max(g.w, g.h);
+    const gate0 = opts.beeArea ? 1.2 * Math.sqrt(opts.beeArea) : 0.05 * Math.max(g.w, g.h);
+    const tracker = C.createTracker({n: c.nBees, maxSpeed: pxPerS, gate0, reacquireAfter: c.trk.reacq});
+    const res = {t: [], tracks: []}; let extraMax = 0, lastUI = 0;
+    const onFrame = t => {
+      const img = grab(g);
+      const d = C.detect(img, B.bg, B.mask, g, opts, B.bgMed, tracker.predictions(t));
+      const o = tracker.step(t, d.dets);
+      const i = res.t.length; res.t.push(+t.toFixed(4));
+      o.rows.forEach((row, k) => {
+        if(!res.tracks[k]) res.tracks[k] = {x: Array(i).fill(null), y: Array(i).fill(null), det: Array(i).fill(0), mer: Array(i).fill(0), rea: Array(i).fill(0)};
+        const T = res.tracks[k];
+        if(row.det){ const [vx, vy] = C.toVideo(g, row.x, row.y); T.x.push(r1(vx)); T.y.push(r1(vy)); } else { T.x.push(null); T.y.push(null); }
+        T.det.push(row.det ? 1 : 0); T.mer.push(row.merged ? 1 : 0); T.rea.push(row.reacq ? 1 : 0);
+      });
+      extraMax = Math.max(extraMax, o.extra);
+      const now = performance.now();
+      if(now - lastUI > 150){ lastUI = now; setProg(0.1 + 0.9 * (t - t0) / (t1 - t0)); $('runMsg').textContent = `Tracking… ${fmt(t)} of ${fmt(t1)}`; liveDraw(res, g, i); }
+    };
+    const method = c.trk.method === 'play' && hasRVFC ? 'play' : 'seek';
+    const err = method === 'play' ? await playLoop(t0, t1, c.trk.hz, c.trk.rate, onFrame) : await seekLoop(t0, t1, c.trk.hz, onFrame);
+    if(err) throw err;
+    if(busy.cancel) return {cancelled: true};
+    while(res.tracks.length < c.nBees){ const n = res.t.length; res.tracks.push({x: Array(n).fill(null), y: Array(n).fill(null), det: Array(n).fill(0), mer: Array(n).fill(0), rea: Array(n).fill(0)}); }
+    let gaps = 0; for(let i = 1; i < res.t.length; i++) if(res.t[i] - res.t[i - 1] > 1.6 / c.trk.hz) gaps++;
+    res.diag = {method, samples: res.t.length, expected: Math.floor((t1 - t0) * c.trk.hz), gaps, extraMax, t0, t1,
+      seconds: Math.round((performance.now() - started) / 100) / 10};
+    res.used = clone({nBees: c.nBees, arena: c.arena, det: c.det, trk: c.trk});
+    res.videoName = videoName; res.at = new Date().toISOString();
+    return res;
+  });
+  if(!out) return;
+  if(out.cancelled){ $('runMsg').className = 'msg'; $('runMsg').textContent = 'Tracking cancelled; earlier results kept.'; return; }
+  r.result = out; changed();
+  const d = out.diag, cov = d.samples / Math.max(1, d.expected);
+  $('runMsg').className = cov < 0.9 || d.gaps > d.samples * 0.05 ? 'msg warn' : 'msg good';
+  $('runMsg').textContent = `Tracked ${fmt(d.t1 - d.t0)} in ${d.seconds} s: ${d.samples} samples (${Math.round(cov * 100)}% of ${d.expected} expected` + (d.gaps ? `, ${d.gaps} gap${d.gaps === 1 ? '' : 's'} longer than a sample` : '') + ').' + (cov < 0.9 || d.gaps > d.samples * 0.05 ? ' Use a slower playback speed, or read frames by seeking, for full coverage.' : '');
+};
+function liveDraw(res, g, i){ live = {res, i}; draw(); }
+let live = null;
+
+/* ---------- metrics for a recording ---------- */
+function tracksOf(r){ const R = r.result; return R ? R.tracks.map(T => ({t: R.t, x: T.x, y: T.y, det: T.det})) : []; }
+function recMetrics(r){
+  if(!r.result) return null;
+  const m = r.cfg.met, zones = zoneList(r), sc = scaleOf(r);
+  const opt = {scale: sc, smooth: m.smooth, maxGap: m.maxGap, moveThr: m.moveThr, minBout: m.minBout, mergeGap: m.minBout, zones};
+  const bees = tracksOf(r).map(tr => C.metrics(tr, opt));
+  const nn = C.nearestNeighbour(tracksOf(r), sc);
+  bees.forEach((b, k) => { const T = r.result.tracks[k]; b.nn = nn[k]; b.merges = C.episodes(T.mer); b.reacq = T.rea.reduce((a, v) => a + v, 0); });
+  const sum = f => bees.reduce((a, b) => a + (f(b) || 0), 0), tr = sum(b => b.tracked);
+  const pooled = {
+    span: bees[0]?.span ?? 0, tracked: tr, coverage: bees.length ? sum(b => b.coverage) / bees.length : 0,
+    distance: sum(b => b.distance), meanSpeed: tr > 0 ? sum(b => b.distance) / tr : null, fracMoving: tr > 0 ? sum(b => b.movingTime) / tr : null,
+    p95Speed: null, zones: zones.map((z, i) => ({name: z.name, time: sum(b => b.zones[i].time), frac: tr > 0 ? sum(b => b.zones[i].time) / tr : null, visits: sum(b => b.zones[i].visits)})),
+    nn: bees.length > 1 ? sum(b => b.nn) / bees.filter(b => b.nn != null).length : null, merges: sum(b => b.merges), reacq: sum(b => b.reacq),
+  };
+  return {bees, pooled, zones, unit: unitOf(r)};
+}
+function staleNote(r){
+  const R = r.result; if(!R) return '';
+  const c = r.cfg, u = R.used, now = {nBees: c.nBees, arena: c.arena, det: c.det, trk: c.trk};
+  return JSON.stringify(now) === JSON.stringify(u) ? '' : 'Arena, detection or tracking settings changed after tracking. Track again to apply them.';
+}
+
+/* ---------- rendering ---------- */
+function changed(){ save(); renderAll(); }
+function renderAll(){ renderTransport(); renderRecs(); renderSettings(); renderDrawHelp(); renderResults(); renderCompare(); draw(); }
+function renderRecs(){
+  const el = $('recs'); el.innerHTML = '';
+  S.recs.forEach(r => {
+    const b = document.createElement('button'); b.className = 'rec' + (r.id === S.current ? ' cur' : '');
+    const st = r.result ? `<span class="pill yes">${r.result.tracks.length} tracked</span>` : '<span class="pill na">not tracked</span>';
+    b.innerHTML = `<span class="id">${esc(r.label)}</span>${st}<span class="sub">${esc([r.group, r.videoName || 'no video', r.cfg.nBees + ' bee' + (r.cfg.nBees === 1 ? '' : 's')].filter(Boolean).join(' · '))}</span>`;
+    b.onclick = () => { if(busy) return; S.current = r.id; preview = null; bgCache = null; live = null; changed(); if(hasVideo && r.videoName && r.videoName !== videoName) toast('Open ' + r.videoName + ' to see this recording on the video.'); };
+    el.appendChild(b);
+  });
+  const r = rec();
+  $('r-label').value = r.label; $('r-group').value = r.group; $('r-n').value = r.cfg.nBees;
+  $('recVideo').textContent = r.videoName ? `Video: ${r.videoName}${r.vw ? ` (${r.vw}×${r.vh}${r.duration ? ', ' + fmt(r.duration) : ''})` : ''}` + (hasVideo && r.videoName !== videoName ? ' — not the video that is open.' : '') : 'No video yet. Opening a video attaches it to this recording.';
+  $('delRec').disabled = !!busy;
+}
+function renderSettings(){
+  const r = rec(), c = r.cfg, u = unitOf(r);
+  document.querySelectorAll('.u').forEach(e => e.textContent = u);
+  $('arenaState').innerHTML = c.arena ? `Arena: ${c.arena.type === 'rect' ? 'rectangle' : 'round'}, ${Math.round(c.arena.w)}×${Math.round(c.arena.h)} px on the video.` + (scaleOf(r) ? '' : ' <b>No scale yet</b>: distances will be in pixels.') : 'No arena yet. Use <b>Draw arena</b> under the video.';
+  $('arenaShape').value = c.arena ? c.arena.type : $('arenaShape').value;
+  $('a-w').value = c.arenaWmm ?? ''; $('a-h').value = c.arenaHmm ?? ''; $('a-edge').value = c.edgeMm ?? '';
+  $('a-edge').disabled = !scaleOf(r);
+  const zl = $('zones'); zl.innerHTML = '';
+  c.zones.forEach((z, i) => {
+    const d = document.createElement('div'); d.className = 'zone';
+    d.innerHTML = `<span class="sw" style="background:${ZCOL[i % ZCOL.length]}"></span><input value="${esc(z.name)}" aria-label="Zone name"><span class="help">${z.shape.type === 'rect' ? 'rect' : 'ellipse'}</span><button class="ghost" title="Remove zone">✕</button>`;
+    d.querySelector('input').onchange = e => { const v = e.target.value.trim(); if(!v || c.zones.some(o => o !== z && o.name === v)){ e.target.value = z.name; toast('Zone names must be unique.'); return; } z.name = v; changed(); };
+    d.querySelector('button').onclick = () => { c.zones.splice(i, 1); changed(); };
+    zl.appendChild(d);
+  });
+  $('d-pol').value = c.det.polarity; $('d-proc').value = String(c.det.procMax); $('d-thr').value = c.det.thr; $('d-thrv').textContent = c.det.thr; $('d-open').checked = c.det.open;
+  $('t-0').value = c.trk.t0 || 0; $('t-1').value = c.trk.t1 ?? ''; $('t-hz').value = c.trk.hz; $('t-max').value = c.trk.maxSpeed; $('t-method').value = c.trk.method; $('t-rate').value = String(c.trk.rate);
+  $('t-max').disabled = !scaleOf(r); $('t-max').title = scaleOf(r) ? '' : 'Set the arena width in mm to use this. Without a scale the tracker allows 0.6 arena widths per second.';
+  $('t-rate').disabled = c.trk.method !== 'play';
+  $('x-smooth').value = c.met.smooth; $('x-move').value = c.met.moveThr; $('x-gap').value = c.met.maxGap; $('x-bout').value = c.met.minBout;
+}
+const num = (v, d) => v == null || !isFinite(v) ? '—' : v.toFixed(d);
+const pct = v => v == null ? '—' : Math.round(v * 100) + '%';
+function renderResults(){
+  const r = rec(), M = recMetrics(r);
+  $('resRec').textContent = r.label;
+  const tbl = $('resTbl'), warn = $('resWarn');
+  if(!M){ tbl.innerHTML = '<tr><td class="empty">Not tracked yet.</td></tr>'; $('traj').innerHTML = ''; $('resNote').textContent = ''; warn.hidden = true; return; }
+  const u = M.unit, d = r.result.diag;
+  $('resNote').textContent = `${fmt(d.t0)}–${fmt(d.t1)} · ${d.samples} samples · ${d.method === 'play' ? 'played' : 'seeked'}`;
+  const notes = [];
+  const st = staleNote(r); if(st) notes.push(st);
+  if(r.result.videoName && hasVideo && r.result.videoName !== videoName) notes.push(`Tracked on ${r.result.videoName}; the open video is different.`);
+  M.bees.forEach((b, k) => { if(b.coverage < 0.8) notes.push(`Bee ${k + 1} was found in only ${pct(b.coverage)} of samples.`); });
+  if(r.cfg.nBees > 1 && M.pooled.merges) notes.push(`${M.pooled.merges} merge episode${M.pooled.merges === 1 ? '' : 's'}: identities may have swapped, so per-bee rows are unreliable. The All bees row is not affected.`);
+  if(d.extraMax) notes.push(`Up to ${d.extraMax} extra blob${d.extraMax === 1 ? '' : 's'} per frame were ignored: check the threshold with Test on this frame.`);
+  warn.hidden = !notes.length; warn.textContent = notes.join(' ');
+  const zh = M.zones.map(z => `<th class="num">${esc(z.name)}</th>`).join('');
+  const row = (name, b, color, cls) => `<tr class="${cls || ''}"><td>${color ? `<span class="dot" style="background:${color}"></span>` : ''}${name}</td>`
+    + `<td class="num">${pct(b.coverage)}</td><td class="num">${num(b.tracked, 1)}</td><td class="num">${num(b.distance, u === 'mm' ? 0 : 0)}</td><td class="num">${num(b.meanSpeed, 1)}</td><td class="num">${pct(b.fracMoving)}</td>`
+    + `<td class="num">${num(b.p95Speed, 1)}</td>` + b.zones.map(z => `<td class="num">${pct(z.frac)} <span class="help">(${z.visits})</span></td>`).join('')
+    + `<td class="num">${num(b.nn, 0)}</td><td class="num">${b.merges}</td><td class="num">${b.reacq}</td></tr>`;
+  tbl.innerHTML = `<thead><tr><th>Bee</th><th class="num">Found</th><th class="num">Tracked s</th><th class="num">Dist ${u}</th><th class="num">Speed ${u}/s</th><th class="num">Moving</th><th class="num">95th ${u}/s</th>${zh}<th class="num">Nearest ${u}</th><th class="num">Merges</th><th class="num">Reacq.</th></tr></thead><tbody>`
+    + M.bees.map((b, k) => row('Bee ' + (k + 1), b, COLORS[k % COLORS.length])).join('')
+    + (M.bees.length > 1 ? row('All bees', M.pooled, null, 'pooled') : '') + '</tbody>';
+  renderTraj(r, M);
+}
+function renderTraj(r, M){
+  const c = r.cfg, a = c.arena; if(!a){ $('traj').innerHTML = ''; return; }
+  const pad = 4, W = 320, H = Math.round(W * a.h / a.w);
+  const X = x => pad + (x - a.x) / a.w * (W - 2 * pad), Y = y => pad + (y - a.y) / a.h * (H - 2 * pad);
+  const shp = (s, attrs) => s.type === 'rect' ? `<rect x="${X(s.x)}" y="${Y(s.y)}" width="${s.w / a.w * (W - 2 * pad)}" height="${s.h / a.h * (H - 2 * pad)}" ${attrs}/>`
+    : `<ellipse cx="${X(s.x + s.w / 2)}" cy="${Y(s.y + s.h / 2)}" rx="${s.w / a.w * (W - 2 * pad) / 2}" ry="${s.h / a.h * (H - 2 * pad) / 2}" ${attrs}/>`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Trajectories in the arena">` + shp(a, 'fill="none" stroke="var(--muted)" stroke-width="1.5"');
+  M.zones.forEach((z, i) => { if(z.name === 'Edge'){ const inner = zoneList(r).find(q => q.edge).inner; svg += shp(inner, 'fill="none" stroke="var(--muted)" stroke-dasharray="2 3"'); } else svg += shp(c.zones.find(q => q.name === z.name).shape, `fill="${ZCOL[i % ZCOL.length]}" fill-opacity=".12" stroke="${ZCOL[i % ZCOL.length]}" stroke-dasharray="4 3"`); });
+  M.bees.forEach((b, k) => {
+    let d = '', pen = false;
+    b.smooth.x.forEach((x, i) => { if(x == null){ pen = false; return; } d += (pen ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(b.smooth.y[i]).toFixed(1); pen = true; });
+    svg += `<path d="${d}" fill="none" stroke="${COLORS[k % COLORS.length]}" stroke-width="1.2" stroke-opacity=".85" stroke-linejoin="round"/>`;
+  });
+  $('traj').innerHTML = svg + '</svg><p class="help">Whole-session paths (smoothed), one color per bee.</p>';
+}
+
+/* ---------- overlay ---------- */
+let maskCanvas = null;
+function draw(){
+  const dpr = window.devicePixelRatio || 1, W = stage.clientWidth, H = stage.clientHeight;
+  if(ov.width !== Math.round(W * dpr) || ov.height !== Math.round(H * dpr)){ ov.width = Math.round(W * dpr); ov.height = Math.round(H * dpr); }
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, W, H);
+  $('badge').hidden = true;
+  if(!hasVideo || !vid.videoWidth) return;
+  const R = contentRect(), r = rec(), c = r.cfg, t = vid.currentTime;
+  // detection preview
+  if($('vMask').checked && preview && Math.abs(preview.t - t) < 1e-3){
+    const g = preview.g;
+    if(!maskCanvas) maskCanvas = document.createElement('canvas');
+    maskCanvas.width = g.w; maskCanvas.height = g.h;
+    const mc = maskCanvas.getContext('2d'), im = mc.createImageData(g.w, g.h);
+    for(let i = 0; i < preview.fg.length; i++) if(preview.fg[i]){ im.data[i * 4] = 255; im.data[i * 4 + 1] = 40; im.data[i * 4 + 2] = 200; im.data[i * 4 + 3] = 150; }
+    mc.putImageData(im, 0, 0);
+    const [x, y] = v2c(g.cx, g.cy, R); octx.imageSmoothingEnabled = false;
+    octx.drawImage(maskCanvas, x, y, g.cw * R.k, g.ch * R.k);
+    preview.dets.forEach(d => { const [vx, vy] = C.toVideo(g, d.x, d.y), [px, py] = v2c(vx, vy, R); octx.strokeStyle = d.merged ? '#ffcc00' : '#ffffff'; octx.lineWidth = 2; octx.beginPath(); octx.moveTo(px - 6, py); octx.lineTo(px + 6, py); octx.moveTo(px, py - 6); octx.lineTo(px, py + 6); octx.stroke(); });
+  }
+  // arena, edge band and zones
+  if(c.arena){ pathShape(octx, c.arena, R); octx.strokeStyle = '#f0a92e'; octx.lineWidth = 2; octx.setLineDash([]); octx.stroke(); }
+  const zl = zoneList(r);
+  zl.forEach((z, i) => {
+    if(z.edge){ pathShape(octx, z.inner, R); octx.strokeStyle = 'rgba(240,169,46,.7)'; octx.setLineDash([2, 4]); octx.lineWidth = 1.5; octx.stroke(); return; }
+    const col = ZCOL[i % ZCOL.length]; pathShape(octx, z.shape, R); octx.strokeStyle = col; octx.setLineDash([6, 4]); octx.lineWidth = 2; octx.stroke();
+    octx.setLineDash([]); octx.fillStyle = col; octx.font = '600 12px ' + getComputedStyle(document.body).fontFamily;
+    const [lx, ly] = v2c(z.shape.x, z.shape.y, R); octx.fillText(z.name, lx + 4, ly + 14);
+  });
+  octx.setLineDash([]);
+  // tracks
+  const res = busy && live ? live.res : (r.result && (!r.result.videoName || r.result.videoName === videoName) ? r.result : null);
+  if($('vTrails').checked && res && res.t.length){
+    let i = busy && live ? live.i : lowerBound(res.t, t + 1e-4) - 1;
+    if(i >= 0 && t - res.t[i] < 2){
+      const from = res.t[i] - 3;
+      res.tracks.forEach((T, k) => {
+        const col = COLORS[k % COLORS.length];
+        octx.strokeStyle = col; octx.lineWidth = 2; octx.beginPath(); let pen = false;
+        for(let j = lowerBound(res.t, from); j <= i; j++){ if(T.x[j] == null){ pen = false; continue; } const [px, py] = v2c(T.x[j], T.y[j], R); if(pen) octx.lineTo(px, py); else octx.moveTo(px, py); pen = true; }
+        octx.stroke();
+        if(T.x[i] != null){
+          const [px, py] = v2c(T.x[i], T.y[i], R);
+          octx.fillStyle = col; octx.beginPath(); octx.arc(px, py, 5, 0, Math.PI * 2); octx.fill();
+          if(T.mer[i] || T.rea[i]){ octx.strokeStyle = '#ffcc00'; octx.lineWidth = 2; octx.beginPath(); octx.arc(px, py, 9, 0, Math.PI * 2); octx.stroke(); }
+          octx.fillStyle = '#fff'; octx.font = '600 12px ' + getComputedStyle(document.body).fontFamily; octx.fillText(String(k + 1), px + 8, py - 8);
+        }
+      });
+      const found = res.tracks.filter(T => T.det[i]).length;
+      $('badge').hidden = false; $('badge').textContent = `${found}/${res.tracks.length} bees found` + (res.tracks.some(T => T.mer[i]) ? ' · merged' : '');
+    }
+  }
+  // rubber band
+  if(drag){
+    const s = {type: drawMode === 'arena' ? $('arenaShape').value : $('zoneShape').value, x: Math.min(drag.x0, drag.x1), y: Math.min(drag.y0, drag.y1), w: Math.abs(drag.x1 - drag.x0), h: Math.abs(drag.y1 - drag.y0)};
+    pathShape(octx, s, R); octx.strokeStyle = '#ffffff'; octx.setLineDash([5, 4]); octx.lineWidth = 2; octx.stroke(); octx.setLineDash([]);
+  }
+}
+function lowerBound(a, v){ let lo = 0, hi = a.length; while(lo < hi){ const m = (lo + hi) >> 1; if(a[m] < v) lo = m + 1; else hi = m; } return lo; }
+new ResizeObserver(() => draw()).observe(stage);
+function frame(){
+  if(hasVideo){ $('clock').textContent = fmt(vid.currentTime); if(isFinite(vid.duration) && vid.duration > 0 && document.activeElement !== $('seek')) $('seek').value = vid.currentTime / vid.duration; }
+  if(hasVideo && !vid.paused && !busy) draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- compare recordings ---------- */
+function metricDefs(){
+  const zones = [...new Set(S.recs.flatMap(r => r.result ? zoneList(r).map(z => z.name) : []))];
+  return [
+    {id: 'distance', label: 'Distance', get: b => b.distance, unit: true},
+    {id: 'meanSpeed', label: 'Mean speed', get: b => b.meanSpeed, unit: '/s'},
+    {id: 'fracMoving', label: 'Time moving', get: b => b.fracMoving, pct: true},
+    ...zones.map(z => ({id: 'z:' + z, label: 'Time in ' + z, get: b => (b.zones.find(q => q.name === z) || {}).frac, pct: true})),
+    {id: 'nn', label: 'Nearest-neighbour distance', get: b => b.nn, unit: true},
+  ];
+}
+function median(a){ const s = a.slice().sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2) : null; }
+function quant(sorted, p){ if(!sorted.length) return null; const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo); }
+function renderCompare(){
+  const defs = metricDefs(), sel = $('c-metric'), prev = sel.value;
+  sel.innerHTML = defs.map(d => `<option value="${esc(d.id)}">${esc(d.label)}</option>`).join('');
+  sel.value = defs.some(d => d.id === prev) ? prev : 'distance';
+  const def = defs.find(d => d.id === sel.value), perBee = $('c-unit').value === 'bee';
+  const pts = [], units = new Set();
+  S.recs.forEach(r => {
+    const M = recMetrics(r); if(!M) return; units.add(M.unit);
+    const add = (b, who) => { const v = def.get(b); if(v != null && isFinite(v)) pts.push({g: r.group || '(no group)', v, who}); };
+    if(perBee) M.bees.forEach((b, k) => add(b, r.label + ' · bee ' + (k + 1))); else add(M.pooled, r.label);
+  });
+  const tracked = S.recs.filter(r => r.result).length;
+  $('cmpNote').textContent = tracked ? `${tracked} tracked recording${tracked === 1 ? '' : 's'}` + (units.size > 1 ? ' · some recordings have no scale, so units differ: set the arena width in mm for all of them.' : '') : '';
+  if(!pts.length){ $('cmpTbl').innerHTML = '<tr><td class="empty">Track at least one recording. Give recordings a Group to compare them.</td></tr>'; $('cmpChart').innerHTML = ''; return; }
+  const groups = [...new Set(pts.map(p => p.g))];
+  const u = units.size === 1 ? [...units][0] : '';
+  const f = v => def.pct ? Math.round(v * 100) + '%' : v.toFixed(def.id === 'distance' ? 0 : 1) + (def.unit ? ' ' + u + (def.unit === '/s' ? '/s' : '') : '');
+  const test = groupTestFn(groups.map(g => pts.filter(p => p.g === g).map(p => p.v)));
+  $('cmpTbl').innerHTML = `<thead><tr><th>Group</th><th class="num">n</th><th class="num">Median</th><th class="num">IQR</th></tr></thead><tbody>` + groups.map((g, i) => {
+    const v = pts.filter(p => p.g === g).map(p => p.v).sort((a, b) => a - b);
+    return `<tr><td><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>${esc(g)}</td><td class="num">${v.length}</td><td class="num">${f(median(v))}</td><td class="num">${v.length > 1 ? f(quant(v, .25)) + ' – ' + f(quant(v, .75)) : '—'}</td></tr>`;
+  }).join('') + `<tr><td colspan="4">${test ? `<span class="pv${test.p < 0.05 ? ' sig' : ''}">${test.name}: ${test.p < 0.001 ? 'p < 0.001' : 'p = ' + test.p.toFixed(test.p < 0.01 ? 3 : 2)}</span>` : '<span class="help">A test needs two or more groups with at least two points each.</span>'}</td></tr></tbody>`;
+  // dot plot
+  const W = 320, H = 200, L = 46, B = 26, max = Math.max(...pts.map(p => p.v)) * 1.08 || 1;
+  const Y = v => H - B - v / max * (H - B - 8), bw = (W - L) / groups.length;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(def.label)} by group">`;
+  for(let k = 0; k <= 4; k++){ const v = max * k / 4, y = Y(v); svg += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${def.pct ? Math.round(v * 100) + '%' : v >= 100 ? Math.round(v) : v.toFixed(1)}</text>`; }
+  groups.forEach((g, i) => {
+    const cx = L + bw * (i + 0.5), v = pts.filter(p => p.g === g), col = COLORS[i % COLORS.length];
+    v.forEach((p, j) => { const jx = cx + ((j * 37) % 11 - 5) * Math.min(3, bw / 30); svg += `<circle cx="${jx}" cy="${Y(p.v)}" r="4" fill="${col}" fill-opacity=".8"><title>${esc(p.who)}: ${f(p.v)}</title></circle>`; });
+    const m = median(v.map(p => p.v)); svg += `<line x1="${cx - bw * 0.3}" x2="${cx + bw * 0.3}" y1="${Y(m)}" y2="${Y(m)}" stroke="var(--ink)" stroke-width="2"/>`;
+    svg += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${esc(g.length > 16 ? g.slice(0, 15) + '…' : g)}</text>`;
+  });
+  $('cmpChart').innerHTML = svg + '</svg>';
+}
+// Rank tests, reused from PER Scorer's analysis panel.
+function erf(x){ const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
+const normSf = z => 0.5 * (1 - erf(z / Math.SQRT2));
+function lgamma(x){ const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5]; let y = x, t = x + 5.5; t -= (x + 0.5) * Math.log(t); let s = 1.000000000190015; c.forEach(v => s += v / ++y); return -t + Math.log(2.5066282746310005 * s / x); }
+function gammaP(a, x){ if(x <= 0) return 0; if(x < a + 1){ let ap = a, sum = 1 / a, del = sum; for(let n = 0; n < 200; n++){ ap++; del *= x / ap; sum += del; if(Math.abs(del) < Math.abs(sum) * 1e-12) break; } return sum * Math.exp(-x + a * Math.log(x) - lgamma(a)); }
+  let b = x + 1 - a, c = 1e300, d = 1 / b, h = d; for(let i = 1; i < 200; i++){ const an = -i * (i - a); b += 2; d = an * d + b; if(Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if(Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if(Math.abs(del - 1) < 1e-12) break; } return 1 - Math.exp(-x + a * Math.log(x) - lgamma(a)) * h; }
+const chi2Sf = (x, df) => 1 - gammaP(df / 2, x / 2);
+function ranks(all){ const idx = all.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]); const r = Array(all.length); let ties = 0;
+  for(let i = 0; i < idx.length;){ let j = i; while(j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++; const avg = (i + j) / 2 + 1; for(let k = i; k <= j; k++) r[idx[k][1]] = avg; const t = j - i + 1; ties += t * t * t - t; i = j + 1; } return {r, ties}; }
+function groupTestFn(groups){
+  const gs = groups.filter(g => g.length); if(gs.length < 2 || gs.some(g => g.length < 2)) return null;
+  const all = gs.flat(), N = all.length, {r, ties} = ranks(all);
+  if(gs.length === 2){ const n1 = gs[0].length, n2 = gs[1].length, R1 = r.slice(0, n1).reduce((a, b) => a + b, 0), U = R1 - n1 * (n1 + 1) / 2, mu = n1 * n2 / 2;
+    const sg = Math.sqrt(n1 * n2 / 12 * ((N + 1) - ties / (N * (N - 1)))); if(!sg) return {name: 'Mann–Whitney', p: 1};
+    return {name: 'Mann–Whitney', p: Math.min(1, 2 * normSf(Math.max(0, Math.abs(U - mu) - 0.5) / sg))}; }
+  let H = 0, o = 0; gs.forEach(g => { const R = r.slice(o, o + g.length).reduce((a, b) => a + b, 0); H += R * R / g.length; o += g.length; });
+  H = 12 / (N * (N + 1)) * H - 3 * (N + 1); const Cc = 1 - ties / (N * N * N - N); if(Cc > 0) H /= Cc;
+  return {name: 'Kruskal–Wallis', p: chi2Sf(Math.max(0, H), gs.length - 1)};
+}
+$('c-metric').onchange = renderCompare; $('c-unit').onchange = renderCompare;
+
+/* ---------- settings inputs ---------- */
+const numIn = (id, fn) => { $(id).onchange = e => { const v = e.target.value === '' ? null : +e.target.value; fn(v, rec().cfg); changed(); }; };
+$('r-label').onchange = e => { rec().label = e.target.value.trim() || rec().label; changed(); };
+$('r-group').onchange = e => { rec().group = e.target.value.trim(); changed(); };
+numIn('r-n', (v, c) => { c.nBees = Math.max(1, Math.min(30, Math.round(v || 1))); });
+numIn('a-w', (v, c) => { c.arenaWmm = v > 0 ? v : null; });
+numIn('a-h', (v, c) => { c.arenaHmm = v > 0 ? v : null; });
+numIn('a-edge', (v, c) => { c.edgeMm = v > 0 ? v : null; });
+$('d-pol').onchange = e => { cfg().det.polarity = e.target.value; changed(); if(preview) testFrame(true); };
+$('d-proc').onchange = e => { cfg().det.procMax = +e.target.value; invalidateBg(); changed(); };
+$('d-thr').oninput = e => { cfg().det.thr = +e.target.value; $('d-thrv').textContent = e.target.value; if(preview && !busy) testFrame(true); };
+$('d-thr').onchange = () => changed();
+$('d-open').onchange = e => { cfg().det.open = e.target.checked; changed(); if(preview) testFrame(true); };
+numIn('t-0', (v, c) => { c.trk.t0 = Math.max(0, v || 0); invalidateBg(); });
+numIn('t-1', (v, c) => { c.trk.t1 = v > 0 ? v : null; invalidateBg(); });
+$('t-0now').onclick = () => { if(!ready()) return; cfg().trk.t0 = r1(vid.currentTime); invalidateBg(); changed(); };
+$('t-1now').onclick = () => { if(!ready()) return; cfg().trk.t1 = r1(vid.currentTime); invalidateBg(); changed(); };
+numIn('t-hz', (v, c) => { c.trk.hz = Math.max(1, Math.min(120, v || 15)); });
+numIn('t-max', (v, c) => { c.trk.maxSpeed = Math.max(1, v || 60); });
+$('t-method').onchange = e => { cfg().trk.method = e.target.value; changed(); };
+$('t-rate').onchange = e => { cfg().trk.rate = +e.target.value; changed(); };
+numIn('x-smooth', (v, c) => { c.met.smooth = Math.max(0, v ?? 0.2); });
+numIn('x-move', (v, c) => { c.met.moveThr = Math.max(0, v ?? 3); });
+numIn('x-gap', (v, c) => { c.met.maxGap = Math.max(0.05, v ?? 0.5); });
+numIn('x-bout', (v, c) => { c.met.minBout = Math.max(0, v ?? 0.3); });
+$('vMask').onchange = e => { if(e.target.checked) testFrame(false); else draw(); };
+$('vTrails').onchange = draw;
+['m-exp','m-date','m-exp-id'].forEach((id, i) => { const key = ['experimenter','date','experiment'][i]; $(id).value = S.session[key] || ''; $(id).onchange = e => { S.session[key] = e.target.value; save(); }; });
+$('newRec').onclick = () => { const nr = newRec(rec()); S.recs.push(nr); S.current = nr.id; preview = null; bgCache = null; changed(); toast('New recording (arena, zones and settings copied). Open its video.'); };
+$('delRec').onclick = () => confirmInline($('delRecWrap'), 'Delete this recording and its tracks?', () => {
+  S.recs = S.recs.filter(r => r.id !== S.current);
+  if(!S.recs.length) S.recs.push(newRec());
+  S.current = S.recs[0].id; preview = null; bgCache = null; changed();
+});
+function confirmInline(wrap, text, yes){
+  const btn = wrap.querySelector('button'); if(!btn || btn.hidden) return;
+  btn.hidden = true;
+  const box = document.createElement('span');
+  box.innerHTML = `<span class="msg bad">${esc(text)}</span> <button class="primary">Yes</button> <button>No</button>`;
+  wrap.appendChild(box);
+  const [y, n] = box.querySelectorAll('button');
+  const restore = () => { box.remove(); btn.hidden = false; };
+  y.onclick = () => { restore(); yes(); };
+  n.onclick = restore;
+}
+
+/* ---------- export ---------- */
+const csvCell = v => { if(v == null) return ''; const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+const toCSV = rows => rows.map(r => r.map(csvCell).join(',')).join('\n') + '\n';
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'x';
+function tracksCSV(r){
+  const R = r.result, sc = scaleOf(r), zones = zoneList(r), M = recMetrics(r), a = r.cfg.arena;
+  const head = ['experiment','recording','group','video','bee','t_s','detected','x_px','y_px','x_mm','y_mm','x_smooth_px','y_smooth_px','speed_' + unitOf(r) + '_s','merged','reacquired', ...zones.map(z => 'in_' + slug(z.name))];
+  const rows = [head];
+  R.tracks.forEach((T, k) => {
+    const sm = M.bees[k].smooth;
+    R.t.forEach((t, i) => {
+      const det = !!T.det[i], x = T.x[i], y = T.y[i];
+      rows.push([S.session.experiment, r.label, r.group, R.videoName || r.videoName, k + 1, t.toFixed(3), det ? 1 : 0, x, y,
+        det && sc ? ((x - a.x) * sc.sx).toFixed(2) : '', det && sc ? ((y - a.y) * sc.sy).toFixed(2) : '',
+        sm.x[i] == null ? '' : sm.x[i].toFixed(1), sm.y[i] == null ? '' : sm.y[i].toFixed(1), sm.speed[i] == null ? '' : sm.speed[i].toFixed(2),
+        T.mer[i], T.rea[i], ...zones.map(z => sm.x[i] == null ? '' : ((z.test ? z.test(sm.x[i], sm.y[i]) : C.inside(z.shape, sm.x[i], sm.y[i])) ? 1 : 0))]);
+    });
+  });
+  return toCSV(rows);
+}
+function summaryCSV(){
+  const zoneNames = [...new Set(S.recs.flatMap(r => r.result ? zoneList(r).map(z => z.name) : []))];
+  const head = ['experiment','experimenter','date','recording','group','video','n_bees','bee','start_s','end_s','samples','units','found_frac','tracked_s','distance','mean_speed','speed_p95','moving_frac','nearest_neighbour','merges','reacquired',
+    ...zoneNames.flatMap(z => [slug(z) + '_frac', slug(z) + '_s', slug(z) + '_visits']), 'threshold','polarity','samples_per_s','smoothing_s','moving_threshold','method'];
+  const rows = [head];
+  S.recs.forEach(r => {
+    const M = recMetrics(r); if(!M) return; const R = r.result, u = R.used;
+    const line = (who, b) => {
+      const zs = zoneNames.flatMap(z => { const q = b.zones.find(x => x.name === z); return q ? [q.frac == null ? '' : q.frac.toFixed(4), q.time.toFixed(2), q.visits] : ['', '', '']; });
+      rows.push([S.session.experiment, S.session.experimenter, S.session.date, r.label, r.group, R.videoName || r.videoName, r.cfg.nBees, who, R.diag.t0.toFixed(2), R.diag.t1.toFixed(2), R.t.length, M.unit,
+        b.coverage.toFixed(4), b.tracked.toFixed(2), b.distance.toFixed(2), b.meanSpeed == null ? '' : b.meanSpeed.toFixed(3), b.p95Speed == null ? '' : b.p95Speed.toFixed(3), b.fracMoving == null ? '' : b.fracMoving.toFixed(4),
+        b.nn == null ? '' : b.nn.toFixed(2), b.merges, b.reacq, ...zs, u.det.thr, u.det.polarity, u.trk.hz, r.cfg.met.smooth, r.cfg.met.moveThr, R.diag.method]);
+    };
+    M.bees.forEach((b, k) => line(k + 1, b));
+    if(M.bees.length > 1) line('all', M.pooled);
+  });
+  return toCSV(rows);
+}
+// A PER Scorer project: each tracked bee becomes a PER Scorer bee; moving and zone bouts become start/stop behaviors.
+function perScorerProject(){
+  const zoneNames = [...new Set(S.recs.flatMap(r => r.result ? zoneList(r).map(z => z.name) : []))];
+  const PAL = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
+  const keys = 'mqwertyuiopasdfghjklxcv1234567890'.split('');
+  const behs = [{id: 'moving', name: 'Moving', key: keys.shift(), type: 'state', role: 'behavior', color: PAL[0]},
+    ...zoneNames.map((z, i) => ({id: 'zone_' + slug(z), name: 'In ' + z, key: keys.shift(), type: 'state', role: 'behavior', color: PAL[(i + 1) % PAL.length]}))];
+  const bees = [];
+  S.recs.forEach(r => {
+    const M = recMetrics(r); if(!M) return;
+    M.bees.forEach((b, k) => {
+      const events = b.runs.moving.map(([t0, t1]) => ({id: uid(), bid: 'moving', t0: +t0.toFixed(3), t1: +t1.toFixed(3)}));
+      M.zones.forEach((z, zi) => b.runs.zones[zi].forEach(([t0, t1]) => events.push({id: uid(), bid: 'zone_' + slug(z.name), t0: +t0.toFixed(3), t1: +t1.toFixed(3)})));
+      events.sort((a, c) => a.t0 - c.t0);
+      bees.push({id: uid(), label: r.label + (M.bees.length > 1 ? ' · bee ' + (k + 1) : ''), holder: '', group: r.group, clock: 0, events,
+        recLen: +(r.result.diag.t1).toFixed(3), videoName: r.result.videoName || r.videoName, cond: {}});
+    });
+  });
+  return {session: clone(S.session), behaviors: behs, settings: {cs: '', resp: [], rw: 3, aw: 10, fps: +$('fps').value || 30, ethoFull: true}, conds: [], bees, current: bees[0]?.id || null};
+}
+const stamp = () => (S.session.date || new Date().toISOString().slice(0, 10)) + (S.session.experiment ? '_' + S.session.experiment.replace(/[^\w-]+/g, '-').slice(0, 40) : '');
+const downloadsP = (window.claude && claude.use) ? claude.use('downloads').catch(() => null) : Promise.resolve(null);
+async function offerFile(filename, text, mime){
+  const d = await downloadsP;
+  if(d){ try{ await d.save({filename, data: text}); toast('Saved ' + filename); }catch(err){ toast(err && err.code === 'declined' ? 'Save cancelled' : 'Could not save the file here.'); } return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type: mime})); a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  toast('Saved ' + filename);
+}
+$('xTracks').onclick = () => { const r = rec(); if(!r.result) return toast('Track this recording first.'); offerFile('bee_tracks_' + slug(r.label) + '_' + stamp() + '.csv', tracksCSV(r), 'text/csv'); };
+$('xSummary').onclick = () => { if(!S.recs.some(r => r.result)) return toast('Track a recording first.'); offerFile('bee_summary_' + stamp() + '.csv', summaryCSV(), 'text/csv'); };
+$('xPer').onclick = () => { if(!S.recs.some(r => r.result)) return toast('Track a recording first.'); offerFile('per_project_from_tracker_' + stamp() + '.json', JSON.stringify(perScorerProject(), null, 1), 'application/json'); };
+$('xJson').onclick = () => offerFile('bee_tracker_project_' + stamp() + '.json', JSON.stringify(S), 'application/json');
+$('iJson').onclick = () => $('jsonFile').click();
+$('jsonFile').onchange = e => {
+  const f = e.target.files[0]; if(!f) return; const rd = new FileReader();
+  rd.onload = () => { try{ const s = JSON.parse(rd.result); if(s.kind !== 'bee-tracker-project' || !Array.isArray(s.recs)) throw 0; S = migrate(s); preview = null; bgCache = null;
+    ['m-exp','m-date','m-exp-id'].forEach((id, i) => $(id).value = S.session[['experimenter','date','experiment'][i]] || ''); changed(); toast('Opened ' + f.name); }
+    catch(err){ toast('That file is not a Bee Tracker project.'); } };
+  rd.readAsText(f); e.target.value = '';
+};
+$('newProj').onclick = () => confirmInline($('newProjWrap'), 'Clear all recordings and results? Save the project first if you need it.', () => {
+  S = emptyState(); const r = newRec(); S.recs.push(r); S.current = r.id; preview = null; bgCache = null;
+  ['m-exp','m-date','m-exp-id'].forEach((id, i) => $(id).value = S.session[['experimenter','date','experiment'][i]] || ''); changed(); toast('New project started.');
+});
+
+/* ---------- keys ---------- */
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if(e.key === 'Escape' && drawMode){ setDrawMode(null); return; }
+  if(['input','select','textarea'].includes(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === ' '){ e.preventDefault(); togglePlay(); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); nudge(e.shiftKey ? -5 : -1); }
+  else if(e.key === 'ArrowRight'){ e.preventDefault(); nudge(e.shiftKey ? 5 : 1); }
+  else if(e.key === ','){ nudge(-fpsStep()); }
+  else if(e.key === '.'){ nudge(fpsStep()); }
+});
+
+let toastT;
+function toast(t){ if(typeof t !== 'string') return; const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); }
+
+// test hooks (used by the automated tests; harmless otherwise)
+window.__beeTracker = {get state(){ return S; }, recMetrics: r => recMetrics(r || rec()), tracksCSV: () => tracksCSV(rec()), summaryCSV, perScorerProject, get busy(){ return !!busy; }, get videoReady(){ return ready(); }};
+
+renderAll();
+requestAnimationFrame(frame);
+try{ const q = new URLSearchParams(location.search).get('video'); if(q){ $('vidUrl').value = q; openVideoUrl(q); } }catch(e){}
+})();
+</script>
+</body>
+</html>
