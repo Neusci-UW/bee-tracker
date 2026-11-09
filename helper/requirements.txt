@@ -1,0 +1,3 @@
+# For helper/led_helper.py on the lab computer (plus NI's NI-DAQmx driver from ni.com)
+nidaqmx
+numpy

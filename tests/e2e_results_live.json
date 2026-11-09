@@ -1,0 +1,42 @@
+{
+ "camera": "/tmp/tmpsdkyefwz/three_bees.y4m: 640\u00d7360 at 30 fps.",
+ "background": "Background learned over 10 s. If a bee stayed put, it is now part of the background: check with Show detection.",
+ "measure": "One bee \u2248 500 px\u00b2 (median of 3 blobs).",
+ "run": "Trial done: 00:20.00, 601 samples at 30.0/s (camera 30.1 fps). Video saved as bee_trial_trial_1_2026-11-09.mp4.",
+ "diag": {
+  "samples": 601,
+  "extraMax": 3,
+  "gaps": 0,
+  "method": "live",
+  "hz": 30,
+  "t0": 0,
+  "t1": 20,
+  "expected": 600,
+  "achievedHz": 30,
+  "cameraFps": 30.05,
+  "missedFrames": 0,
+  "seconds": 20,
+  "camera": "/tmp/tmpsdkyefwz/three_bees.y4m",
+  "size": "640x360"
+ },
+ "found_frac": 0.9954259576901087,
+ "err_mm_median": 0.10966426035860832,
+ "err_mm_p95": 0.15476191391941596,
+ "id_switches": 6,
+ "time_offset_frames": 314,
+ "samples_skipped_at_loop_seam": 18,
+ "saved_video": {
+  "file": "bee_trial_trial_1_2026-11-09.mp4",
+  "bytes": 475145,
+  "probe": [
+   {
+    "codec_name": "h264",
+    "width": 640,
+    "height": 360,
+    "nb_read_frames": "601"
+   }
+  ]
+ },
+ "page_errors": [],
+ "screenshot": "/tmp/tmpsdkyefwz/live_stage.png"
+}

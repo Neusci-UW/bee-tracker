@@ -123,3 +123,39 @@ test('procGeometry round-trips coordinates', () => {
   const [px, py] = C.toProc(g, 500, 350), [vx, vy] = C.toVideo(g, px, py);
   assert.ok(Math.abs(vx - 500) < 1e-9 && Math.abs(vy - 350) < 1e-9);
 });
+
+test('lightConditions splits a trial by LED state', () => {
+  const ev = [
+    {t: 2, output: 'ao0', peak: 2, segs: [[0.5, 5.5, 2]]},          // ao0 on 2.5-7.5
+    {t: 10, output: 'ao0', peak: 3, segs: [[0, 1, 3]]},              // ao0 on 10-11
+    {t: 6, output: 'ao1', peak: 1.5, segs: [[0, 0.01, 1.5], [0.1, 0.11, 1.5], [3.99, 4, 1.5]]}, // a pulse train 6-10
+  ];
+  const c = C.lightConditions(ev, 15);
+  assert.deepEqual(c.map(x => [x.t0, x.t1, x.key]), [
+    [0, 2.5, 'No stimulus'], [2.5, 6, 'ao0 2 V'], [6, 7.5, 'ao0 2 V + ao1 1.5 V'], [7.5, 10, 'ao1 1.5 V'],
+    [10, 11, 'ao0 3 V'], [11, 15, 'No stimulus']]);
+  assert.equal(C.conditionAt(c, 6.2), 'ao0 2 V + ao1 1.5 V');
+  assert.equal(C.conditionAt(c, 14.99), 'No stimulus');
+  assert.equal(C.conditionAt(c, 20), null);
+});
+
+test('metrics can be restricted to some times', () => {
+  const t = [], x = [], y = [], det = [];
+  for(let i = 0; i <= 200; i++){ t.push(i / 20); x.push(i < 100 ? 100 : 100 + (i - 100) * 2); y.push(50); det.push(true); }  // still 0-5 s, then 40 px/s
+  const base = {scale: null, smooth: 0, maxGap: 0.5, moveThr: 5, zones: []};
+  const first = C.metrics({t, x, y, det}, {...base, include: s => s < 5});
+  const second = C.metrics({t, x, y, det}, {...base, include: s => s >= 5});
+  assert.ok(Math.abs(first.tracked - 5) < 1e-9 && first.distance === 0 && first.fracMoving === 0);
+  assert.ok(Math.abs(second.meanSpeed - 40) < 1e-6 && second.fracMoving === 1);
+});
+
+test('lightChanges finds when a light in view turns on and off, and latency is measured', () => {
+  const t = [], v = [];
+  for(let i = 0; i < 300; i++){ const s = i / 30; t.push(s); v.push(((s >= 2.1 && s < 4.1) || (s >= 6.1 && s < 7.1) ? 180 : 40) + (i % 3)); }
+  const L = C.lightChanges(t, v, 12);
+  assert.equal(L.onsets.length, 2); assert.equal(L.offsets.length, 2);
+  assert.ok(Math.abs(L.onsets[0] - 2.1) < 0.04 && Math.abs(L.onsets[1] - 6.1) < 0.04);
+  const lat = C.matchLatency([2.0, 6.0, 9.0], L.onsets, 1);
+  assert.equal(lat.length, 2); assert.ok(lat.every(d => Math.abs(d - 0.1) < 0.04));
+  assert.equal(C.lightChanges(t, t.map(() => 50), 12), null);   // no light change in view
+});

@@ -306,7 +306,8 @@ function runsFrom(steps, minBout, mergeGap){
   return runs.filter(r => r[1] - r[0] >= minBout);
 }
 function metrics(sm, opt){
-  const {t, det} = sm, sc = opt.scale, ux = sc ? sc.sx : 1, uy = sc ? sc.sy : 1;
+  // opt.include(t) (optional): count only steps that start at times it accepts, e.g. one LED condition.
+  const {t, det} = sm, sc = opt.scale, ux = sc ? sc.sx : 1, uy = sc ? sc.sy : 1, inc = opt.include || null;
   const segs = segments(t, det, opt.maxGap);
   const zones = opt.zones || [];
   let dist = 0, tracked = 0, moving = 0;
@@ -319,9 +320,10 @@ function metrics(sm, opt){
     const inZ = zones.map(() => false);
     for(let k = 0; k < seg.length; k++){
       const zNow = zones.map(z => z.test ? z.test(xs[k], ys[k]) : inside(z.shape, xs[k], ys[k]));
-      zNow.forEach((v, z) => { if(v && !inZ[z]) visits[z]++; inZ[z] = v; });
+      const counted = !inc || inc(t[seg[k]]);
+      zNow.forEach((v, z) => { if(v && !inZ[z] && counted) visits[z]++; inZ[z] = v; });
       if(k === seg.length - 1) break;
-      const dt = t[seg[k + 1]] - t[seg[k]]; if(dt <= 0) continue;
+      const dt = t[seg[k + 1]] - t[seg[k]]; if(dt <= 0 || !counted) continue;
       const d = Math.hypot((xs[k + 1] - xs[k]) * ux, (ys[k + 1] - ys[k]) * uy), v = d / dt;
       dist += d; tracked += dt; speeds.push(v); spd[seg[k]] = v;
       const on = v >= opt.moveThr; if(on) moving += dt;
@@ -356,10 +358,64 @@ function nearestNeighbour(tracks, scale){
   }
   return sum.map((s, a) => cnt[a] ? s / cnt[a] : null);
 }
+/* ---------- LEDs (stimuli logged by Argus) ---------- */
+const fmtLevel = v => (Math.round(v * 100) / 100) + ' V';
+// Split [0, tEnd] into stretches by which LED outputs are on, and at what level.
+// events: [{t, output, peak, segs: [[start_s, end_s, volts], ...]}] with t in trial seconds.
+// A stimulus counts as "on" from its first to its last nonzero stretch (so a pulse train is one block).
+function lightConditions(events, tEnd){
+  const spans = [];
+  events.forEach(e => {
+    if(!e.segs || !e.segs.length) return;
+    const a = e.t + e.segs[0][0], b = e.t + e.segs[e.segs.length - 1][1];
+    if(b > a) spans.push({a, b, out: e.output, key: e.output + ' ' + fmtLevel(e.peak)});
+  });
+  const cuts = new Set([0, tEnd]);
+  spans.forEach(s => { [s.a, s.b].forEach(v => { if(v > 0 && v < tEnd) cuts.add(v); }); });
+  const pts = [...cuts].sort((x, y) => x - y), out = [];
+  for(let i = 0; i < pts.length - 1; i++){
+    const a = pts[i], b = pts[i + 1], m = (a + b) / 2, byOut = {};
+    spans.forEach(s => { if(s.a <= m && m < s.b && (!byOut[s.out] || s.a > byOut[s.out].a)) byOut[s.out] = s; });
+    const key = Object.keys(byOut).sort().map(o => byOut[o].key).join(' + ') || 'No stimulus';
+    const last = out[out.length - 1];
+    if(last && last.key === key) last.t1 = b; else out.push({t0: a, t1: b, key});
+  }
+  return out;
+}
+function conditionAt(intervals, t){
+  let lo = 0, hi = intervals.length - 1;
+  while(lo <= hi){ const m = (lo + hi) >> 1, c = intervals[m]; if(t < c.t0) hi = m - 1; else if(t >= c.t1) lo = m + 1; else return c.key; }
+  return null;
+}
+// Times a light in the camera's "light check" box turned on/off, from its brightness per sample.
+// Needs a clear difference between dark and lit (minContrast grey levels between the 10th and 90th percentiles).
+function lightChanges(t, v, minContrast){
+  const ok = v.map((x, i) => [t[i], x]).filter(p => p[1] != null && isFinite(p[1]));
+  if(ok.length < 4) return null;
+  const s = ok.map(p => p[1]).sort((a, b) => a - b), q = p => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+  const lo = q(0.1), hi = q(0.9); if(hi - lo < (minContrast ?? 12)) return null;
+  const mid = (lo + hi) / 2, hyst = (hi - lo) * 0.1, onsets = [], offsets = [];
+  let on = ok[0][1] > mid;
+  for(let i = 1; i < ok.length; i++){
+    const [t1, x1] = ok[i], [t0, x0] = ok[i - 1];
+    const cross = x0 === x1 ? t1 : t0 + (mid - x0) / (x1 - x0) * (t1 - t0);
+    if(!on && x1 > mid + hyst){ on = true; onsets.push(Math.max(t0, Math.min(t1, cross))); }
+    else if(on && x1 < mid - hyst){ on = false; offsets.push(Math.max(t0, Math.min(t1, cross))); }
+  }
+  return {onsets, offsets, lo, hi};
+}
+// For each commanded onset, the delay until the camera saw the light come on (within -0.2 .. maxLag s).
+function matchLatency(ref, cam, maxLag){
+  const out = [];
+  ref.forEach(r => { const c = cam.find(x => x >= r - 0.2 && x <= r + (maxLag ?? 1)); if(c != null) out.push(c - r); });
+  return out;
+}
+
 // Count separate merge episodes (runs of merged samples).
 function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && !prev) n++; prev = !!f; }); return n; }
 
 return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
-  findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes};
+  findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
+  lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel};
 })();
 if(typeof module !== 'undefined') module.exports = BeeCore;
