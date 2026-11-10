@@ -3,9 +3,9 @@
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
-page = (root / "src" / "page.html").read_text()
-core = (root / "src" / "core.js").read_text()
+page = (root / "src" / "page.html").read_text(encoding="utf-8")
+core = (root / "src" / "core.js").read_text(encoding="utf-8")
 assert page.count("/*@CORE@*/") == 1, "page.html must contain the /*@CORE@*/ placeholder once"
 out = root / "bee-tracker.html"
-out.write_text(page.replace("/*@CORE@*/", core.rstrip() + "\n"))
+out.write_text(page.replace("/*@CORE@*/", core.rstrip() + "\n"), encoding="utf-8")
 print(f"wrote {out.relative_to(root)} ({out.stat().st_size // 1024} KB)")

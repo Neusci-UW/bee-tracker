@@ -26,6 +26,7 @@ Safety:
     localhost, and only with the code. After 10 wrong codes it stops accepting requests.
 
 API (JSON over HTTP):
+  GET  /                      the Bee Tracker page, when the desktop app serves it
   GET  /api/hello             {"app": "bee-led-helper", "api": 1, ...}       (no code needed)
   GET  /api/status            device, limits, whether a protocol is running, this computer's clock
   POST /api/run   {"steps": [{"dur": s, "ao0": V, "ao1": V}, ...], "rate": S/s}
@@ -257,8 +258,9 @@ class SimulatedOutput(_Output):
 
 # ---------------------------------------------------------------- HTTP
 class Helper:
-    def __init__(self, output: _Output, max_v: float, min_v: float, code: str | None = None):
+    def __init__(self, output: _Output, max_v: float, min_v: float, code: str | None = None, page: bytes | None = None):
         self.out, self.max_v, self.min_v = output, max_v, min_v
+        self.page = page                  # the Bee Tracker page, served at / by the desktop app
         self.code = code or f"{secrets.randbelow(10 ** 6):06d}"
         self.bad_codes = 0
         self.server: ThreadingHTTPServer | None = None
@@ -357,7 +359,14 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         try:
-            if path == "/api/hello":
+            if path in ("/", "/bee-tracker.html") and self.helper.page is not None:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(self.helper.page)))
+                self.end_headers()
+                self.wfile.write(self.helper.page)
+            elif path == "/api/hello":
                 if self._allowed(need_code=False):
                     self._reply(200, {"app": "bee-led-helper", "api": API, **self.helper.out.describe()})
             elif path == "/api/status":

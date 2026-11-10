@@ -17,6 +17,15 @@ Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It run
 
 Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**.
 
+## Desktop app (.exe / .dmg)
+
+`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off.
+
+- **LEDs need Windows** with NI's NI-DAQmx driver (ni.com) and the USB-6003 plugged in before the app starts. Without them the LEDs run in simulated mode and everything else works. NI-DAQmx has no macOS driver, so on a Mac the LEDs are always simulated.
+- **First start:** the apps aren't code-signed. On Windows, choose *More info → Run anyway*. On a Mac, drag Bee Tracker to Applications, open it, then allow it under *System Settings → Privacy & Security → Open Anyway*.
+- Settings are kept per address. The app's page (`http://127.0.0.1:8765/`) doesn't see settings saved while using `bee-tracker.html` as a file, so save and reopen the project file to move between them.
+- Get the builds from the **Desktop app** workflow on GitHub (Actions → Desktop app → Run workflow, or push a tag such as `v1.0` to attach them to a release). To build one yourself: `pip install pyinstaller numpy` (plus `nidaqmx` on Windows), then `python tools/package.py`. PyInstaller can't cross-build, so build the .exe on Windows and the .dmg on a Mac.
+
 ## Recording setup (matters more than any setting)
 
 - **Fixed camera, looking straight down**, on a stand, not handheld. Turn off auto-exposure, auto-white-balance and autofocus if the camera allows it. The tracker compensates for overall brightness changes, but not for changes in one region of the frame.
@@ -68,6 +77,8 @@ Each tracked bee becomes a PER Scorer bee. **Moving** and **In \<zone\>** become
 src/core.js         detection, tracking and metrics (pure functions, also run by Node tests)
 src/page.html       the page; /*@CORE@*/ is replaced with core.js
 tools/build.py      writes bee-tracker.html  ← edit src/, then run this
+app/bee_tracker_app.py  the desktop app: LED helper + page server + launcher
+tools/package.py        builds dist/BeeTracker.exe or dist/BeeTracker.dmg
 tools/make_synthetic.py
 tests/core.test.cjs                 node --test tests/core.test.cjs
 tests/e2e_synthetic.py              python3 tests/e2e_synthetic.py /tmp/synth [play|seek]

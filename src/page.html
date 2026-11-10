@@ -412,6 +412,9 @@ function migrate(s){
   return s;
 }
 S = migrate(S);
+// The desktop app serves this page from the LED helper and passes its code in the address (#led-code=123456).
+{ const m = /[#&]led-code=(\d{6})/.exec(location.hash);
+  if(m){ S.ui.led.url = location.origin; S.ui.led.code = m[1]; history.replaceState(null, '', location.pathname + location.search); } }
 function load(){ try{ const s = JSON.parse(localStorage.getItem(STORE)); return s && s.recs ? s : null; }catch(e){ return null; } }
 let saveT, warnedQuota = false;
 function save(){ clearTimeout(saveT); saveT = setTimeout(() => { try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){ if(!warnedQuota){ warnedQuota = true; toast('Too much data to keep in browser storage. Save the project file.'); } } }, 400); }
@@ -1003,6 +1006,8 @@ function renderLedPreview(c, total){
   $('ledPrev').innerHTML = svg + `<text x="${W - 4}" y="${H}" text-anchor="end">${fmt(total)}</text></svg>`;
 }
 $('ag-connect').onclick = agConnect;
+// Opened by the desktop app: its helper served this page, so connect to it straight away.
+if(S.ui.led.code && agUrl() === location.origin){ save(); agConnect(); }
 $('ag-disc').onclick = () => { AG.ok = false; AG.status = null; $('ag-msg').textContent = ''; renderLedPanel(); };
 $('ag-url').onchange = e => { S.ui.led.url = e.target.value.trim() || 'http://127.0.0.1:8765'; AG.ok = false; save(); renderLedPanel(); };
 $('ag-code').onchange = e => { S.ui.led.code = e.target.value.replace(/\D/g, '').slice(0, 6); AG.ok = false; save(); renderLedPanel(); };

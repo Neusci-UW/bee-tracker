@@ -213,6 +213,13 @@ def test_bad_protocol_and_bad_json_get_reasons(helper):
     assert st == 400 and "JSON" in body["message"]
 
 
+def test_page_is_served_only_when_given(helper):
+    assert call(helper, "/", code=None, origin=None)[0] == 404
+    helper.page = b"<!doctype html><title>Bee Tracker</title>"
+    with urllib.request.urlopen(helper.url + "/", timeout=5) as r:
+        assert r.status == 200 and r.headers["Content-Type"].startswith("text/html") and r.read() == helper.page
+
+
 def test_too_many_wrong_codes_lock_it(helper):
     for _ in range(L.MAX_BAD_CODES):
         call(helper, "/api/status", code="999999")

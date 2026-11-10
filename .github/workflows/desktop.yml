@@ -1,0 +1,41 @@
+# Builds the desktop app: BeeTracker.exe (Windows) and BeeTracker.dmg (macOS, Apple silicon).
+# Run it from the Actions tab (Run workflow), or push a tag like v1.0 to also attach both to a release.
+name: Desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            file: dist/BeeTracker.exe
+            extra: nidaqmx
+          - os: macos-latest
+            file: dist/BeeTracker.dmg
+            extra: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyinstaller numpy pytest ${{ matrix.extra }}
+      - run: python -m pytest -q tests/test_led_helper.py
+      - run: python tools/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BeeTracker-${{ runner.os }}
+          path: ${{ matrix.file }}
+      - if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes 2>/dev/null || true; gh release upload "$GITHUB_REF_NAME" "${{ matrix.file }}" --clobber
