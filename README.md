@@ -11,7 +11,7 @@ Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It run
 3. Set **Bees in arena**.
 4. Pause on a frame where every bee is visible and apart. Press **Test on this frame**: detected pixels show in magenta, with a cross on each bee. Move the **threshold** until each bee is one solid blob and nothing else lights up.
 5. Press **Measure bee size**. This is needed to split bees that touch.
-6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking.
+6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To remove the arena, a zone or the light check, click its outline on the video, then **Remove** (or press Delete).
 7. Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
 8. Export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
 
