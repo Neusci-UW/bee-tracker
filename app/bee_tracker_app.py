@@ -80,11 +80,13 @@ def browser() -> str | None:
 
 
 def open_page(url: str) -> bool:
-    """Open the page in its own Chrome/Edge window; False if neither is installed (then the default browser)."""
+    """Open the page in a new Chrome/Edge window; False if neither is installed (then the default browser).
+
+    A normal window, not --app: on some Windows computers an --app window stays blank."""
     exe = browser()
     if exe:
         try:
-            subprocess.Popen([exe, f"--app={url}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([exe, "--new-window", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         except OSError:
             pass
