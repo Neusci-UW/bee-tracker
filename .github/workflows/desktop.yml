@@ -1,11 +1,13 @@
 # Builds the desktop app: BeeTracker.exe (Windows) and BeeTracker.dmg (macOS, Apple silicon).
-# Run it from the Actions tab (Run workflow), or push a tag like v1.0 to also attach both to a release.
+# It runs when the app, helper or page change; run it by hand from the Actions tab (Run workflow),
+# or push a tag like v1.0 to also attach both to a release.
 name: Desktop app
 
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    paths: ["app/**", "helper/**", "src/**", "tools/**", ".github/workflows/desktop.yml"]
 
 permissions:
   contents: write
