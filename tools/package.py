@@ -22,7 +22,8 @@ args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--window
         "--paths", str(root / "helper"), "--add-data", f"{root / 'bee-tracker.html'}{os.pathsep}.",
         "--distpath", str(dist), "--workpath", str(work), "--specpath", str(work)]
 if sys.platform == "win32":
-    args += ["--onefile", "--collect-all", "nidaqmx"]
+    # NI's library and its helpers look up their own versions at import, so their metadata must be bundled too
+    args += ["--onefile", "--collect-all", "nidaqmx", "--collect-all", "nitypes", "--copy-metadata", "hightime"]
 elif sys.platform == "darwin":
     args += ["--osx-bundle-identifier", "org.beetracker.app"]
 subprocess.run(args + [str(root / "app" / "bee_tracker_app.py")], check=True)
