@@ -26,6 +26,27 @@ Use **New recording** for each video. It copies the arena, zones and settings, w
 - Settings are kept per address. The app's page (`http://127.0.0.1:8765/`) doesn't see settings saved while using `bee-tracker.html` as a file, so save and reopen the project file to move between them.
 - Get the builds from the **Desktop app** workflow on GitHub (Actions → Desktop app → Run workflow, or push a tag such as `v1.0` to attach them to a release). To build one yourself: `pip install pyinstaller numpy` (plus `nidaqmx` on Windows), then `python tools/package.py`. PyInstaller can't cross-build, so build the .exe on Windows and the .dmg on a Mac.
 
+## LED protocols
+
+With the camera, each trial can play an LED protocol on the two analog outputs (ao0, ao1) of an NI USB-6003. The page sends the protocol to the **LED helper**, a small program that has to be running on the same computer; the page can't start it. `bee-tracker.html` on its own has no helper: use the desktop app, or run `py helper\led_helper.py` and type the code it prints.
+
+A protocol is a list of **segments**. Each has a length, an optional **condition label**, and a function for each LED:
+
+| Function | Settings |
+|---|---|
+| Off, Constant | level (V) |
+| Ramp | from, to (V), straight over the segment |
+| Exponential | from, to (V), time constant τ (s) |
+| Sine | frequency (Hz), midpoint and ± amplitude (V), phase (°) |
+| Pulse train | rate (Hz), duty cycle (%), on and off levels (V) |
+| Single pulse | delay and width (s), level (V) |
+| Random levels | min and max (V), hold time (s), seed (the same seed gives the same levels) |
+| Formula | any formula of `t` (s into the segment) and `d` (segment length), e.g. `2.5 + 2*sin(2*pi*t)` or `3*(t < 0.5)`; `sin cos tan exp log sqrt abs floor ceil round min max mod clamp`, `pi`, `e`, `^` and comparisons work |
+
+The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). The preview shows both outputs; a segment that goes outside the helper's 0–5 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
+
+Results, the **LED conditions CSV** and PER Scorer behaviors are grouped by condition: a segment's label, or what its LEDs do when it has none (e.g. `Blue 2 V`). The **LED log CSV** lists every segment each LED played, with its function. Protocols made before functions existed open as constant segments.
+
 ## Recording setup (matters more than any setting)
 
 - **Fixed camera, looking straight down**, on a stand, not handheld. Turn off auto-exposure, auto-white-balance and autofocus if the camera allows it. The tracker compensates for overall brightness changes, but not for changes in one region of the frame.

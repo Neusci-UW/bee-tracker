@@ -411,11 +411,222 @@ function matchLatency(ref, cam, maxLag){
   return out;
 }
 
+/* ---------- LED protocol: segments, each output following a function of time ---------- */
+// A protocol is segments of {label, dur (s), ao0: fn, ao1: fn}; fn = {fn: name, ...params}, with t = seconds into the segment.
+// helper/led_helper.py builds the DAQ's waveform from the same definitions: change both together.
+const LED_FNS = {
+  off:     {name: 'Off', params: []},
+  const:   {name: 'Constant', params: [['v', 'V', 2]]},
+  ramp:    {name: 'Ramp', params: [['from', 'from V', 0], ['to', 'to V', 4]]},
+  exp:     {name: 'Exponential', params: [['from', 'from V', 4], ['to', 'to V', 0], ['tau', 'τ s', 2]]},
+  sine:    {name: 'Sine', params: [['freq', 'Hz', 0.5], ['mid', 'mid V', 2.5], ['amp', '± V', 2], ['phase', 'phase °', 0]]},
+  pulses:  {name: 'Pulse train', params: [['freq', 'Hz', 10], ['duty', 'duty %', 50], ['on', 'on V', 3], ['off', 'off V', 0]]},
+  pulse:   {name: 'Single pulse', params: [['delay', 'delay s', 1], ['width', 'width s', 0.5], ['v', 'V', 3]]},
+  random:  {name: 'Random levels', params: [['min', 'min V', 0], ['max', 'max V', 3], ['hold', 'hold s', 0.5], ['seed', 'seed', 1]]},
+  formula: {name: 'Formula', params: [['expr', 'f(t) =', '2.5 + 2*sin(2*pi*t)']]},
+};
+function ledFn(name, params){
+  const f = {fn: Object.hasOwn(LED_FNS, name) ? name : 'off'};
+  LED_FNS[f.fn].params.forEach(([k, , d]) => { f[k] = params && params[k] != null ? params[k] : d; });
+  return f;
+}
+
+// Formulas: numbers, t (s into the segment), d (segment length), pi, e; + - * / ^, comparisons (1 or 0), and
+// sin cos tan abs sqrt exp log floor ceil round min max mod clamp. Parsed, never run as code.
+const FORMULA_FNS = {sin: [1, Math.sin], cos: [1, Math.cos], tan: [1, Math.tan], abs: [1, Math.abs], sqrt: [1, Math.sqrt],
+  exp: [1, Math.exp], log: [1, Math.log], floor: [1, Math.floor], ceil: [1, Math.ceil], round: [1, x => Math.floor(x + 0.5)],
+  min: [2, Math.min], max: [2, Math.max], mod: [2, (a, b) => a - b * Math.floor(a / b)], clamp: [3, (x, a, b) => Math.min(Math.max(x, a), b)]};
+function parseFormula(src){
+  src = String(src == null ? '' : src);
+  if(!src.trim()) throw new Error('The formula is empty.');
+  if(src.length > 300) throw new Error('The formula is longer than 300 characters.');
+  const toks = [], re = /\s*(?:(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?)|([a-z_]\w*)|(<=|>=|[-+*/^(),<>]))/iy;
+  let m;
+  re.lastIndex = 0;
+  while(re.lastIndex < src.length){
+    const at = re.lastIndex;
+    if(!(m = re.exec(src))){ if(/^\s*$/.test(src.slice(at))) break; throw new Error(`The formula has a character it can’t use: “${src.slice(at).trim()[0]}”.`); }
+    toks.push(m[1] != null ? {n: +m[1]} : m[2] != null ? {id: m[2].toLowerCase()} : {op: m[3]});
+  }
+  let i = 0;
+  const peek = () => toks[i], isOp = o => toks[i] && toks[i].op === o;
+  const need = o => { if(!isOp(o)) throw new Error(`The formula is missing “${o}”.`); i++; };
+  function cmp(){
+    const a = sum();
+    if(toks[i] && ['<', '<=', '>', '>='].includes(toks[i].op)){
+      const o = toks[i++].op, b = sum();
+      return o === '<' ? (t, d) => +(a(t, d) < b(t, d)) : o === '<=' ? (t, d) => +(a(t, d) <= b(t, d))
+        : o === '>' ? (t, d) => +(a(t, d) > b(t, d)) : (t, d) => +(a(t, d) >= b(t, d));
+    }
+    return a;
+  }
+  function sum(){
+    let a = prod();
+    while(isOp('+') || isOp('-')){ const o = toks[i++].op, x = a, b = prod(); a = o === '+' ? (t, d) => x(t, d) + b(t, d) : (t, d) => x(t, d) - b(t, d); }
+    return a;
+  }
+  function prod(){
+    let a = unary();
+    while(isOp('*') || isOp('/')){ const o = toks[i++].op, x = a, b = unary(); a = o === '*' ? (t, d) => x(t, d) * b(t, d) : (t, d) => x(t, d) / b(t, d); }
+    return a;
+  }
+  function unary(){
+    if(isOp('-')){ i++; const a = unary(); return (t, d) => -a(t, d); }
+    if(isOp('+')){ i++; return unary(); }
+    const a = atom();
+    if(isOp('^')){ i++; const b = unary(); return (t, d) => Math.pow(a(t, d), b(t, d)); }
+    return a;
+  }
+  function atom(){
+    const k = peek();
+    if(!k) throw new Error('The formula ends too early.');
+    i++;
+    if(k.n != null){ const v = k.n; return () => v; }
+    if(k.op === '('){ const a = cmp(); need(')'); return a; }
+    if(k.id != null){
+      if(k.id === 't') return t => t;
+      if(k.id === 'd') return (t, d) => d;
+      if(k.id === 'pi') return () => Math.PI;
+      if(k.id === 'e') return () => Math.E;
+      const f = Object.hasOwn(FORMULA_FNS, k.id) && FORMULA_FNS[k.id];
+      if(!f) throw new Error(`The formula uses “${k.id}”, which it doesn’t know. Use t, d, pi, e, or a function such as sin(…).`);
+      need('(');
+      const args = [cmp()];
+      while(isOp(',')){ i++; args.push(cmp()); }
+      need(')');
+      if(args.length !== f[0]) throw new Error(`${k.id}(…) takes ${f[0]} value${f[0] === 1 ? '' : 's'}.`);
+      const g = f[1];
+      return args.length === 1 ? (t, d) => g(args[0](t, d)) : args.length === 2 ? (t, d) => g(args[0](t, d), args[1](t, d))
+        : (t, d) => g(args[0](t, d), args[1](t, d), args[2](t, d));
+    }
+    throw new Error(`The formula has “${k.op}” where a number or name should be.`);
+  }
+  const f = cmp();
+  if(i < toks.length) throw new Error(`The formula has something extra at “${toks[i].op || toks[i].id || toks[i].n}”.`);
+  return f;
+}
+// Random levels: the same hash as the helper's, so the page knows exactly what was played.
+function hash01(seed, k){
+  let h = Math.imul(seed ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul(k + 1, 0xC2B2AE35);
+  h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B); h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+// Problems with one output's settings, as sentences (empty if fine).
+function ledFnProblems(f){
+  if(!f || !Object.hasOwn(LED_FNS, f.fn)) return ['Unknown function.'];
+  const def = LED_FNS[f.fn];
+  if(f.fn === 'formula'){ try{ parseFormula(f.expr); return []; }catch(e){ return [e.message]; } }
+  const p = [];
+  def.params.forEach(([k, label]) => { if(!(typeof f[k] === 'number' && isFinite(f[k]))) p.push(`${label.replace(/ (V|s|Hz|%|°)$/, '')} must be a number.`); });
+  if(p.length) return p;
+  if(f.fn === 'exp' && !(f.tau > 0)) p.push('τ must be more than 0 s.');
+  if(f.fn === 'pulses' && !(f.freq > 0)) p.push('The pulse rate must be more than 0 Hz.');
+  if(f.fn === 'pulses' && !(f.duty > 0 && f.duty < 100)) p.push('The duty cycle must be between 0 and 100%.');
+  if(f.fn === 'sine' && f.freq < 0) p.push('The frequency can’t be negative.');
+  if(f.fn === 'pulse' && (f.delay < 0 || !(f.width > 0))) p.push('The pulse needs a delay of 0 s or more and a width over 0 s.');
+  if(f.fn === 'random' && !(f.hold >= 0.001)) p.push('Each random level must hold for at least 0.001 s.');
+  if(f.fn === 'random' && !(Number.isInteger(f.seed) && f.seed >= 0 && f.seed < 2 ** 31)) p.push('The seed must be a whole number from 0.');
+  return p;
+}
+// A function of (t, d) for one output's settings; call ledFnProblems first.
+function ledEval(f){
+  switch(f && f.fn){
+    case 'const': return () => f.v;
+    case 'ramp': return (t, d) => f.from + (f.to - f.from) * t / d;
+    case 'exp': return t => f.to + (f.from - f.to) * Math.exp(-t / f.tau);
+    case 'sine': return t => f.mid + f.amp * Math.sin(2 * Math.PI * f.freq * t + f.phase * Math.PI / 180);
+    case 'pulses': return t => { const x = t * f.freq; return x - Math.floor(x) < f.duty / 100 - 1e-9 ? f.on : f.off; };
+    case 'pulse': return t => t >= f.delay - 1e-9 && t < f.delay + f.width - 1e-9 ? f.v : 0;
+    case 'random': return t => f.min + (f.max - f.min) * hash01(f.seed, Math.floor(t / f.hold + 1e-9));
+    case 'formula': return parseFormula(f.expr);
+    default: return () => 0;
+  }
+}
+// (Edges get 1e-9 s of slack, so one that falls on a sample time, like 0.2 + 0.1 s, lands the same way every time.)
+// Samples per segment, as the helper counts them.
+const ledSamples = (dur, rate) => Math.max(1, Math.round(dur * rate));
+// Lowest and highest level of one output over a segment, at the DAQ's sample times (NaN if a formula breaks).
+function ledRange(f, dur, rate){
+  const g = ledEval(f), n = ledSamples(dur, rate);
+  let lo = Infinity, hi = -Infinity;
+  for(let j = 0; j < n; j++){ const v = g(j / rate, dur); if(!isFinite(v)) return {lo: NaN, hi: NaN, at: j / rate}; if(v < lo) lo = v; if(v > hi) hi = v; }
+  return {lo, hi};
+}
+// Short description of what one output does, e.g. "2 V", "ramp 0–4 V", "10 Hz pulses 3 V".
+function ledDescribe(f){
+  const v = x => (Math.round(x * 100) / 100);
+  switch(f && f.fn){
+    case 'const': return v(f.v) + ' V';
+    case 'ramp': return `ramp ${v(f.from)}–${v(f.to)} V`;
+    case 'exp': return `exp ${v(f.from)}→${v(f.to)} V, τ ${v(f.tau)} s`;
+    case 'sine': return `sine ${v(f.freq)} Hz, ${v(f.mid)} ± ${v(f.amp)} V` + (f.phase ? `, ${v(f.phase)}°` : '');
+    case 'pulses': return `${v(f.freq)} Hz pulses ${v(f.on)} V, ${v(f.duty)}%` + (f.off ? ` (off ${v(f.off)} V)` : '');
+    case 'pulse': return `pulse ${v(f.v)} V at ${v(f.delay)}–${v(f.delay + f.width)} s`;
+    case 'random': return `random ${v(f.min)}–${v(f.max)} V every ${v(f.hold)} s`;
+    case 'formula': return 'f(t) = ' + String(f.expr).trim();
+    default: return 'off';
+  }
+}
+const ledIsOff = f => !f || f.fn === 'off' || (f.fn === 'const' && f.v === 0);
+// The condition a segment counts as: its label, or else what the LEDs do ("Blue 2 V + Green sine 1 Hz, …").
+function ledConditionName(seg, names){
+  const lab = String(seg.label || '').trim();
+  if(lab) return lab;
+  const on = ['ao0', 'ao1'].filter(o => !ledIsOff(seg[o])).map(o => `${(names && names[o]) || o} ${ledDescribe(seg[o])}`);
+  return on.join(' + ') || 'No stimulus';
+}
+// Segments in play order: the protocol `repeats` times, shuffled within each repeat when asked (seeded, so it can be logged).
+function ledSequence(led, seed){
+  const segs = led.segs || [], out = [];
+  let s = (seed >>> 0) || 1;
+  const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  for(let r = 0; r < Math.max(1, led.repeats | 0); r++){
+    const idx = segs.map((_, k) => k);
+    if(led.shuffle) for(let k = idx.length - 1; k > 0; k--){ const j = Math.floor(rnd() * (k + 1)); [idx[k], idx[j]] = [idx[j], idx[k]]; }
+    idx.forEach(k => out.push(Object.assign({index: k, repeat: r + 1}, segs[k])));
+  }
+  return out;
+}
+// What was played, on the trial clock: conditions over [0, tEnd] (gaps are "No stimulus"),
+// one event per segment and lit output, and the times an output went from 0 V to on (for the light check).
+// starts: each segment's start in s after the protocol began (from the helper); t0: protocol start in trial s.
+function ledPlayed(seq, starts, t0, tEnd, rate, names){
+  const conditions = [], events = [], onsets = [];
+  const add = (a, b, key) => { if(b <= a) return; const last = conditions[conditions.length - 1];
+    if(last && last.key === key && Math.abs(last.t1 - a) < 1e-6) last.t1 = b; else conditions.push({t0: a, t1: b, key}); };
+  let prevEnd = 0;
+  const lastOn = {ao0: false, ao1: false};
+  seq.forEach((s, i) => {
+    const a = t0 + starts[i], b = a + ledSamples(s.dur, rate) / rate;
+    if(a >= tEnd) return;
+    const key = ledConditionName(s, names), end = Math.min(b, tEnd);
+    add(Math.max(prevEnd, 0), Math.max(0, a), 'No stimulus');
+    add(Math.max(a, 0), end, key);
+    prevEnd = end;
+    ['ao0', 'ao1'].forEach(o => {
+      const f = s[o], g = ledEval(f), n = Math.min(ledSamples(s.dur, rate), Math.ceil((end - a) * rate - 1e-6));
+      if(ledIsOff(f)){ lastOn[o] = false; return; }
+      let lo = Infinity, hi = -Infinity;
+      for(let j = 0; j < n; j++){
+        const v = g(j / rate, s.dur), on = v > 0;
+        if(on && !lastOn[o] && onsets.length < 20000) onsets.push(+(a + j / rate).toFixed(4));
+        lastOn[o] = on; if(v < lo) lo = v; if(v > hi) hi = v;
+      }
+      if(n > 0) events.push({t: +a.toFixed(4), dur: +(end - a).toFixed(4), output: (names && names[o]) || o, channel: o, segment: s.index + 1, repeat: s.repeat,
+        label: key, fn: ledDescribe(f), peak: +hi.toFixed(4), low: +lo.toFixed(4), segs: [[0, +(end - a).toFixed(4), +hi.toFixed(4)]]});
+    });
+  });
+  add(Math.max(prevEnd, 0), tEnd, 'No stimulus');
+  events.sort((x, y) => x.t - y.t || x.channel.localeCompare(y.channel)).forEach((e, k) => { e.seq = k + 1; });
+  return {conditions, events, onsets: onsets.sort((x, y) => x - y)};
+}
+
 // Count separate merge episodes (runs of merged samples).
 function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && !prev) n++; prev = !!f; }); return n; }
 
 return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
   findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
-  lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel};
+  lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel,
+  LED_FNS, ledFn, parseFormula, hash01, ledFnProblems, ledEval, ledSamples, ledRange, ledDescribe, ledIsOff, ledConditionName, ledSequence, ledPlayed};
 })();
 if(typeof module !== 'undefined') module.exports = BeeCore;

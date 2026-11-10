@@ -3,8 +3,9 @@
 
   python3 tests/e2e_led_helper.py /tmp/synth
 
-The helper runs with --simulated (no DAQ). The protocol is typed into the page's step table:
-off 2 s, ao0 ("Blue") 2 V 2 s, off 2 s, ao1 ("Green") 2 V 2 s, off 2 s, repeated twice (20 s).
+The helper runs with --simulated (no DAQ). The protocol is set in the page's segment editor:
+off 2 s, ao0 ("Blue") 2 V 2 s, off 2 s, ao1 ("Green") 5 Hz pulses at 2 V 2 s ("Green flicker"), off 2 s,
+repeated twice (20 s).
 Trial 1 ends with the protocol; trial 2 is cut short at 5 s and must turn the LEDs off.
 """
 import json
@@ -56,18 +57,23 @@ def main():
             page.fill("#ag-code", CODE); page.press("#ag-code", "Enter")
             page.click("#ag-connect"); page.wait_for_function("document.getElementById('ag-state').textContent === 'connected'", timeout=15000)
             out["connect_msg"] = page.inner_text("#ag-msg")
-            # protocol through the step table
+            # protocol through the segment editor
+            seg = lambda i: page.locator("#ledSegs .ledseg").nth(i)
             page.fill("#led-n0", "Blue"); page.press("#led-n0", "Tab")
             page.fill("#led-n1", "Green"); page.press("#led-n1", "Tab")
             for i in range(5):
-                inp = page.locator("#ledSteps tbody tr").nth(i).locator("input[data-k=dur]")
+                inp = seg(i).locator("input[data-k=dur]")
                 inp.fill("2"); inp.press("Tab")
+            seg(3).locator("select[data-o=ao1]").select_option("pulses")
+            for k, v in (("freq", "5"), ("on", "2")):
+                inp = seg(3).locator(f"input[data-o=ao1][data-p={k}]"); inp.fill(v); inp.press("Tab")
+            inp = seg(3).locator("input[data-k=label]"); inp.fill("Green flicker"); inp.press("Tab")
             page.fill("#led-rep", "2"); page.press("#led-rep", "Tab")
             out["protocol_summary"] = page.inner_text("#ledSum")
-            bad = page.locator("#ledSteps tbody tr").nth(1).locator("input[data-k=ao0]")
+            bad = seg(1).locator("input[data-o=ao0][data-p=v]")
             bad.fill("7"); bad.press("Tab")
             out["limit_msg"] = page.inner_text("#ledSum")
-            bad = page.locator("#ledSteps tbody tr").nth(1).locator("input[data-k=ao0]")
+            bad = seg(1).locator("input[data-o=ao0][data-p=v]")
             bad.fill("2"); bad.press("Tab")
             # Test LEDs button plays 2 x 1 s on the helper
             run_before = (helper_status().get("run") or {}).get("id", 0)
@@ -140,6 +146,7 @@ def main():
     assert len(out["trial2_events"]) == 1 and out["trial2_events"][0][0] == "Blue"
     assert "Wrong code" in out["wrong_code_msg"] and "outside" in out["limit_msg"]
     assert out["tracks_has_led"] and not errors
+    assert any(line.startswith("Green flicker") for line in out["led_table"].splitlines()), out["led_table"]
 
 
 if __name__ == "__main__":
