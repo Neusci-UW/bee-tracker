@@ -6,6 +6,7 @@ name: Desktop app
 on:
   workflow_dispatch:
   push:
+    branches: ["**"]
     tags: ["v*"]
     paths: ["app/**", "helper/**", "src/**", "tools/**", ".github/workflows/desktop.yml"]
 
