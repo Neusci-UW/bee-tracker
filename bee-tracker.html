@@ -1681,8 +1681,8 @@ async function agConnect(){
   $('ag-msg').className = 'msg'; $('ag-msg').textContent = 'Connecting…';
   try{
     const st = await agSync(5);
-    $('ag-msg').className = 'msg good';
-    $('ag-msg').textContent = (st.simulated ? 'Connected to the helper in simulated mode (no DAQ): no LEDs will light.' : `Connected: ${st.device} (${st.product}).`) + ` ao0 and ao1 from ${st.min_v} to ${st.max_v} V.`
+    $('ag-msg').className = st.simulated ? 'msg warn' : 'msg good';
+    $('ag-msg').textContent = (st.simulated ? 'Connected to the helper in simulated mode (no DAQ): no LEDs will light.' + (st.note ? ' ' + st.note.replace(/^Simulated LEDs: /, 'Why: ') : '') : `Connected: ${st.device} (${st.product}).`) + ` ao0 and ao1 from ${st.min_v} to ${st.max_v} V.`
       + (st.running ? ' A protocol is playing now.' : '') + (Math.abs(AG.offset) > 50 ? ` The helper’s clock is ${Math.round(AG.offset)} ms off this page’s; that is corrected.` : '');
     if(!S.ui.led.run){ S.ui.led.run = true; save(); }
   }catch(e){ AG.ok = false; $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; }
@@ -1797,7 +1797,7 @@ $('ledTest').onclick = async () => {
     if(v > 0) steps.push(Object.assign({dur: 1, ao0: 0, ao1: 0}, {[o]: Math.min(v, limits().hi)}));
   });
   if(!steps.length) return toast('Every level in the protocol is 0 V, so there is nothing to test.');
-  try{ const r = await agFetch('/api/run', 'POST', {steps, rate: LED_RATE}); if(!r.ok) throw new Error(r.message); toast(steps.map(s => OUTS.filter(o => s[o]).map(o => `${ledName(c, o)} ${+s[o].toFixed(2)} V`)).join(', then ') + ', 1 s each.'); }
+  try{ const r = await agFetch('/api/run', 'POST', {steps, rate: LED_RATE}); if(!r.ok) throw new Error(r.message); toast(steps.map(s => OUTS.filter(o => s[o]).map(o => `${ledName(c, o)} ${+s[o].toFixed(2)} V`)).join(', then ') + ', 1 s each' + (AG.status && AG.status.simulated ? ' (simulated: no LEDs light).' : '.')); }
   catch(e){ $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; }
 };
 $('ledOff').onclick = async () => { try{ await agFetch('/api/stop', 'POST'); toast('Both LEDs off.'); }catch(e){ $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; } };

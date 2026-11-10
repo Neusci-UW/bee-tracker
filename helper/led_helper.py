@@ -474,6 +474,7 @@ class Helper:
     def __init__(self, output: _Output, max_v: float, min_v: float, code: str | None = None, page: bytes | None = None):
         self.out, self.max_v, self.min_v = output, max_v, min_v
         self.page = page                  # the Bee Tracker page, served at / by the desktop app
+        self.note = ""                    # why the output is simulated, when the desktop app knows
         self.code = code or f"{secrets.randbelow(10 ** 6):06d}"
         self.bad_codes = 0
         self.server: ThreadingHTTPServer | None = None
@@ -482,7 +483,7 @@ class Helper:
         r = self.out.run
         return {"app": "bee-led-helper", "api": API, "time": time.time(), **self.out.describe(),
                 "outputs": list(OUTPUTS), "max_v": self.max_v, "min_v": self.min_v, "max_rate": MAX_RATE,
-                "running": self.out.busy, "run": r, "error": self.out.error}
+                "running": self.out.busy, "run": r, "error": self.out.error, "note": self.note}
 
     def run_protocol(self, body: dict) -> tuple[int, dict]:
         rate = float(body.get("rate", DEFAULT_RATE) or DEFAULT_RATE)

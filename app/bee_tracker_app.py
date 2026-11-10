@@ -17,6 +17,7 @@ import atexit
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import threading
@@ -34,6 +35,26 @@ PORTS = range(8765, 8775)
 MAX_VOLTS = 5.0
 
 
+def ni_dlls() -> list[str]:
+    """NI-DAQmx's driver files present in Windows' System32 (what NI's Python library loads)."""
+    sysdir = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+    return [n for n in ("nicai_utf8.dll", "nicaiu.dll") if (sysdir / n).is_file()]
+
+
+def daq_problem(e: BaseException) -> str:
+    """Why NI-DAQmx couldn't be used, from what actually failed (not a guess)."""
+    if isinstance(e, ImportError):
+        return f"Simulated LEDs: this copy of Bee Tracker couldn't load NI's Python library ({e}). Please report this."
+    if type(e).__name__ == "DaqNotFoundError":
+        dlls, why = ni_dlls(), e.__cause__
+        if dlls:
+            return (f"Simulated LEDs: NI-DAQmx is installed ({dlls[0]} is in System32), but Windows wouldn't load it"
+                    f"{': ' + str(why) if why else ''}. Restart the computer; if that doesn't help, repair NI-DAQmx with NI Package Manager.")
+        return ("Simulated LEDs: NI-DAQmx isn't installed (there's no nicaiu.dll in System32). Install the NI-DAQmx driver "
+                "from ni.com, restart the computer, then start Bee Tracker again.")
+    return f"Simulated LEDs: NI-DAQmx gave an error: {type(e).__name__}: {e}"
+
+
 def open_output() -> tuple[L._Output, str]:
     """The NI DAQ if there is one (a USB-6003 first), otherwise simulated output, with a note why."""
     if sys.platform == "darwin":
@@ -42,7 +63,7 @@ def open_output() -> tuple[L._Output, str]:
         import nidaqmx.system
         devices = list(nidaqmx.system.System.local().devices)
     except Exception as e:
-        return L.SimulatedOutput(), f"Simulated LEDs: the NI-DAQmx driver isn't installed (get it from ni.com). ({e})"
+        return L.SimulatedOutput(), daq_problem(e)
     if not devices:
         return L.SimulatedOutput(), "Simulated LEDs: no NI device found. Plug in the DAQ and restart Bee Tracker."
     dev = next((d for d in devices if "6003" in d.product_type), devices[0])
@@ -100,6 +121,7 @@ class App:
         out, note = open_output()
         page = (ROOT / "bee-tracker.html").read_bytes()
         self.helper = L.Helper(out, MAX_VOLTS, 0.0, page=page)
+        self.helper.note = note
         for port in PORTS:
             if running_copy(port):          # opened twice: show the copy that's running
                 open_page(f"http://127.0.0.1:{port}/")
@@ -124,6 +146,9 @@ class App:
         tk.Label(root, text="Bee Tracker is running", font=font.Font(size=15, weight="bold")).pack(anchor="w", padx=16, pady=(14, 2))
         tk.Label(root, text=(f"LEDs: {d['device']} ({d['product']}), ao0 and ao1 from 0 to {MAX_VOLTS:g} V." if not out.simulated else note),
                  wraplength=380, justify="left", fg="#a05a00" if out.simulated else "#1d6b2f").pack(anchor="w", **pad)
+        if note:
+            tk.Button(root, text="Copy this message", command=lambda: (root.clipboard_clear(), root.clipboard_append(note),
+                                                                  self.msg.config(text="Copied. Paste it in a message to whoever set up Bee Tracker."))).pack(anchor="w", padx=16)
         tk.Label(root, text=f"Page: {self.url}    LED code: {self.helper.code}", fg="#555").pack(anchor="w", **pad)
         self.msg = tk.Label(root, text="", fg="#555", wraplength=380, justify="left")
         self.msg.pack(anchor="w", **pad)
@@ -154,7 +179,26 @@ class App:
         self.root.destroy()
 
 
+def check(path: str) -> int:
+    """BeeTracker --check FILE: write what this copy finds (Python, NI's library, driver files, DAQ) and quit."""
+    lines = [f"Bee Tracker check, {sys.platform}, Python {sys.version.split()[0]} {8 * struct.calcsize('P')}-bit, "
+             f"{'bundled' if hasattr(sys, '_MEIPASS') else 'from source'}"]
+    try:
+        import nidaqmx
+        lines.append(f"nidaqmx {getattr(nidaqmx, '__version__', '?')} loaded")
+    except Exception as e:
+        lines.append(f"nidaqmx failed to load: {type(e).__name__}: {e}")
+    if sys.platform == "win32":
+        lines.append("NI driver files in System32: " + (", ".join(ni_dlls()) or "none"))
+    out, note = open_output()
+    lines.append("LEDs: " + (note or "{device} ({product})".format(**out.describe())))
+    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return 0
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--check":
+        return check(sys.argv[2])
     root = tk.Tk()
     try:
         App(root)

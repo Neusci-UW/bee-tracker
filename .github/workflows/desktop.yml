@@ -37,6 +37,14 @@ jobs:
       - run: node --test tests/core.test.cjs
       - run: python -m pytest -q tests/test_led_helper.py   # includes a check that the page and helper make the same waveform
       - run: python tools/package.py
+      - name: Check the .exe loads NI's library (this runner has no NI driver, so it should say so)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Start-Process -FilePath dist\BeeTracker.exe -ArgumentList '--check', "$PWD\check.txt" -Wait
+          Get-Content check.txt
+          if (Select-String -Path check.txt -Pattern "failed to load|couldn't load NI's Python library") { exit 1 }
+          if (-not (Select-String -Path check.txt -Pattern "isn't installed")) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: BeeTracker-${{ runner.os }}
