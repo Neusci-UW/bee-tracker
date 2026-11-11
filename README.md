@@ -27,9 +27,15 @@ Beside the track map, two charts show the trial over time: each bee's **distance
 
 Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**, the second tab of the results. The **?** in the header lists the keyboard shortcuts.
 
+## Several cameras and linked arenas
+
+Under **Live camera**, set **Cameras** to 2, 3 or 4 and choose a layout (side by side, stacked or 2 × 2) and a camera for each tile (A, B, …). Bee Tracker joins them into one image, and everything else (arena, zones, detection, trials, results, the saved trial video) works on that image as if it were one camera. Each tile has a **zoom**: set it so 1 mm spans the same pixels in every tile, so distances are right across tiles. Tiles are at most one frame apart. Two cameras usually work on one computer; more may need separate USB ports, and the page warns if the frame rate drops.
+
+For **linked arenas** (a bee moving between arenas through a tunnel, for example one arena per camera), draw the arena around the whole image, then draw each real arena as a zone and tick **Arena area** in the bar under the video. Results then add **Crossings** (moves from one arena area to another), **Transit s** (time between leaving one and arriving in the next) and the **first crossing**, also in the CSVs, Compare recordings and the PER Scorer export (*In transit*). Distances between bees count only bees in the same arena.
+
 ## Desktop app (.exe / .dmg)
 
-`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off.
+`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off. The app doesn't update itself: for a new version, download the new BeeTracker.exe (or .dmg) from the Releases page and replace the old one; recordings and settings stay, because they're kept in the browser.
 
 - **LEDs need Windows** with NI's NI-DAQmx driver (ni.com) and the USB-6003 plugged in before the app starts. Without them the LEDs run in simulated mode and everything else works. NI-DAQmx has no macOS driver, so on a Mac the LEDs are always simulated.
 - **First start:** the apps aren't code-signed. On Windows, choose *More info → Run anyway*. On a Mac, drag Bee Tracker to Applications, open it, then allow it under *System Settings → Privacy & Security → Open Anyway*.
@@ -56,6 +62,16 @@ A protocol is a list of **segments**. Each has a length, an optional **condition
 The LEDs tab lists the segments; **Edit protocol** widens the sidebar to edit them. The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). **Test LEDs** turns each output on at 5 V for 1 s, one after the other, whatever the protocol. The preview shows both outputs; a segment that goes outside the helper's 0–10 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
 
 Results, the **LED conditions CSV** and PER Scorer behaviors are grouped by condition: a segment's label, or what its LEDs do when it has none (e.g. `Blue 2 V`). The **LED log CSV** lists every segment each LED played, with its function. Protocols made before functions existed open as constant segments.
+
+## Wiring the LEDs
+
+The USB-6003's analog outputs are single-ended: **AO 0** and **AO 1** each give a voltage measured against the shared **AO GND**. Every circuit needs a return to AO GND; both LEDs share it.
+
+- **Don't drive LEDs straight from the pins** unless they are small indicator LEDs: each output gives only about 5 mA, and an LED's brightness isn't linear with voltage. Use an LED driver with an analog dimming input, and connect AO 0 or AO 1 to its control input and AO GND to its ground.
+- **Low-cost drivers:** a Mean Well LDD-H module (LDD-350H, LDD-700H; a few dollars) on a breadboard; a PT4115 board (about $1–3; its DIM pin takes about 0.5–2.5 V, so add a divider); or an op-amp current sink (LM358, a logic-level MOSFET and a sense resistor; current = control voltage / sense resistance). Avoid drivers that dim with low-frequency PWM: bees see flicker far faster than people do.
+- **LDD-H on a breadboard:** a 12 V supply to the red (+) and blue (−) rails; the LDD-H across the centre channel with **+Vin** to the red rail and **−Vin** to the blue rail; **DIM** to AO 0, with a 10 kΩ resistor from DIM to the blue rail so the LED stays off when the DAQ is unplugged (check what your model does with DIM left open); **+Vout** and **−Vout** to the LED's + and −; and **AO GND** to the blue rail. Check the pin order and the DIM input range in your model's datasheet. A second LED is the same circuit on AO 1.
+- **Power:** a regulated 12 V DC adapter of at least 1 A (2 A leaves room for two or three LDD-H channels), with a barrel-jack-to-breadboard adapter. The supply must exceed the LEDs' total forward voltage by a few volts.
+- **Limits:** levels can go up to 10 V. Keep every protocol level within your driver's control range (often 0–5 V), and never below 0 V. Measure light against voltage once (a light meter or photodiode) to report intensities, not volts.
 
 ## Recording setup (matters more than any setting)
 

@@ -1,11 +1,13 @@
 // A simulated top-down arena camera, for demos, the walkthrough recording and speed tests. Injected before the page
 // loads, it replaces the browser's camera with a drawn round arena on a light floor and N dark bees that walk, pause,
 // turn and bump into each other, with sensor noise and slight flicker.
-// Settings (set on window before this runs): __simW, __simH (default 1280x720), __simBees (3), __simSeed (7).
+// Settings (set on window before this runs): __simW, __simH (default 1280x720), __simBees (3), __simSeed (7), and
+// __simCams (1): with more, each camera shows its own arena (camera k uses seed + k and the same number of bees).
 // The bees' true positions are kept in window.__simTruth ({t, p: performance.now(), xy: [[x, y], ...]} per frame),
 // and the arena's box in window.__simArena.
 (() => {
-  const W = +(window.__simW || 1280), H = +(window.__simH || 720), N = +(window.__simBees || 3), FPS = 30;
+const W = +(window.__simW || 1280), H = +(window.__simH || 720), N = +(window.__simBees || 3), FPS = 30, CAMS = +(window.__simCams || 1);
+function camera(k){
   const cx = W / 2, cy = H / 2, R = H * 0.42, bee = H / 720;            // a bee is about 26x14 px at 720p
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
   // a fixed noise tile drawn at a random offset each frame: cheap sensor noise
@@ -13,12 +15,12 @@
   for(let i = 0; i < id.data.length; i += 4){ const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 14; }
   ng.putImageData(id, 0, 0);
   const pat = g.createPattern(nt, 'repeat');
-  let seed = +(window.__simSeed || 7); const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let seed = +(window.__simSeed || 7) + k * 101; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const bees = Array.from({length: N}, (_, k) => {
     const a = k / N * 6.28, r = R * 0.5;
     return {x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), h: rnd() * 6.28, v: 0, rest: rnd() * 2, walk: 0};
   });
-  const truth = []; window.__simTruth = truth; let t = 0;
+  const truth = []; let t = 0;
   function step(dt){
     bees.forEach(b => {
       if(b.rest > 0){ b.rest -= dt; b.v = 0; if(b.rest <= 0) b.walk = 1 + rnd() * 4; }
@@ -48,9 +50,16 @@
     if(truth.length > 20000) truth.shift();
   }
   setInterval(paint, 1000 / FPS); paint();
-  const stream = cv.captureStream(FPS), label = `Simulated arena camera (${N} bees)`;
+  const stream = cv.captureStream(FPS), label = CAMS > 1 ? `Simulated arena camera ${k + 1} (${N} bees)` : `Simulated arena camera (${N} bees)`;
   stream.getVideoTracks().forEach(tr => Object.defineProperty(tr, 'label', {value: label}));
-  navigator.mediaDevices.getUserMedia = async () => stream;
-  navigator.mediaDevices.enumerateDevices = async () => [{kind: 'videoinput', deviceId: 'sim', label, groupId: ''}];
-  window.__simCanvas = cv; window.__simArena = {x: cx - R, y: cy - R, w: 2 * R, h: 2 * R};
+  return {stream, label, truth, canvas: cv, arena: {x: cx - R, y: cy - R, w: 2 * R, h: 2 * R}};
+}
+const cams = Array.from({length: CAMS}, (_, k) => camera(k)), id = k => 'sim' + k;
+navigator.mediaDevices.getUserMedia = async c => {
+  const want = c && c.video && c.video.deviceId && c.video.deviceId.exact, k = want ? cams.findIndex((_, i) => id(i) === want) : 0;
+  if(k < 0) throw Object.assign(new Error('No such camera'), {name: 'NotFoundError'});
+  return cams[k].stream;
+};
+navigator.mediaDevices.enumerateDevices = async () => cams.map((c, k) => ({kind: 'videoinput', deviceId: id(k), label: c.label, groupId: ''}));
+window.__simTruth = cams[0].truth; window.__simCanvas = cams[0].canvas; window.__simArena = cams[0].arena; window.__simCameras = cams;
 })();

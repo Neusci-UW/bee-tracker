@@ -255,3 +255,14 @@ test('social: time near another bee, encounters and first contact per pair', () 
   assert.equal(s.pairs[2].encounters, 0); assert.equal(s.pairs[2].first, null);
   assert.equal(C.social(t, pairs, 3, 10, 1, 3, 0).bees[0].encounters, 0);     // shorter than the shortest bout kept
 });
+
+test('crossings between arena areas, and time in transit', () => {
+  const t = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  //          A  A  -  .  B  B  .  A  A  -1 (- = not seen, . = seen in no area)
+  const c = C.crossings(t, [0, 0, null, -1, 1, 1, null, 0, 0, -1]);
+  assert.equal(c.n, 2);
+  assert.deepEqual(c.list.map(x => [x.from, x.to, x.t0, x.t1]), [[0, 1, 1, 4], [1, 0, 5, 7]]);
+  assert.equal(c.transit, 5);
+  assert.equal(c.first.t0, 1);
+  assert.equal(C.crossings(t, t.map(() => 0)).n, 0);
+});

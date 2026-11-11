@@ -1,85 +1,85 @@
 WEBVTT
 
-00:00:00.947 --> 00:00:12.213
+00:00:00.909 --> 00:00:12.175
 Bee Tracker follows every bee in an arena, live from a camera or from a saved video, and turns the tracks into distances, speeds, zone times and social contact.
 
-00:00:12.214 --> 00:00:18.347
+00:00:12.176 --> 00:00:18.308
 This demo uses a simulated camera with three bees, so you can follow along without any hardware.
 
-00:00:18.347 --> 00:00:22.755
+00:00:18.308 --> 00:00:22.717
 Start with the session details: who you are, and what the experiment is.
 
-00:00:22.755 --> 00:00:27.596
+00:00:22.717 --> 00:00:27.561
 Then press Start camera. If you have more than one camera, choose it first.
 
-00:00:27.596 --> 00:00:31.665
+00:00:27.561 --> 00:00:31.630
 Press Draw arena, and drag a box around the arena floor.
 
-00:00:31.665 --> 00:00:38.228
+00:00:31.630 --> 00:00:38.189
 Enter the arena's real width in millimetres. That sets the scale, so distances come out in millimetres.
 
-00:00:38.228 --> 00:00:41.053
+00:00:38.189 --> 00:00:41.019
 Then tell it how many bees are in the arena.
 
-00:00:41.053 --> 00:00:46.675
+00:00:41.019 --> 00:00:46.645
 Zones mark places you care about, like a feeder. Press Add zone, and drag a box.
 
-00:00:46.676 --> 00:00:53.538
+00:00:46.645 --> 00:00:53.508
 Click a zone's outline to select it. You can rename it, drag it into place, or resize it with the handles.
 
-00:00:53.538 --> 00:00:57.903
+00:00:53.509 --> 00:00:57.876
 An edge band measures time near the wall. Here, ten millimetres.
 
-00:00:57.903 --> 00:01:02.482
+00:00:57.876 --> 00:01:02.455
 Now the Detect tab. With the bees in the arena, press Set up detection.
 
-00:01:02.483 --> 00:01:08.553
+00:01:02.455 --> 00:01:08.529
 It learns the background while the bees move, then works out the threshold, and the size of one bee.
 
-00:01:08.553 --> 00:01:16.425
+00:01:08.529 --> 00:01:16.402
 It found all three bees. The magenta shows what it detects. If it ever gets something wrong, adjust it under Advanced.
 
-00:01:16.426 --> 00:01:24.117
+00:01:16.403 --> 00:01:24.096
 The LEDs tab plays a light protocol on the DAQ with each trial. The desktop app connects to it for you.
 
-00:01:24.118 --> 00:01:31.446
+00:01:24.097 --> 00:01:31.428
 Each segment sets what both LEDs do. Here: dark, then blue on, dark again, then a green flicker.
 
-00:01:31.447 --> 00:01:38.212
+00:01:31.430 --> 00:01:38.193
 Test LEDs turns each one on at five volts for a second, so you can check the wiring.
 
-00:01:38.212 --> 00:01:49.281
+00:01:38.193 --> 00:01:49.095
 Everything for a trial sits under the video. Set the length, here thirty seconds, and press Start trial.
 
-00:01:49.281 --> 00:01:55.945
+00:01:49.095 --> 00:01:55.759
 Each bee gets a number and a coloured track. The red timer shows how far the trial has got.
 
-00:01:55.945 --> 00:02:02.717
+00:01:55.760 --> 00:02:02.532
 The LED protocol plays on the DAQ's own clock, lined up with the camera frames.
 
-00:02:02.718 --> 00:02:08.617
+00:02:02.533 --> 00:02:08.431
 Keep this tab in front while it tracks: browsers slow down tabs that are hidden.
 
-00:02:08.617 --> 00:02:12.392
+00:02:08.431 --> 00:02:12.209
 When the trial ends, the results fill in straight away.
 
-00:02:12.392 --> 00:02:19.304
+00:02:12.209 --> 00:02:19.123
 Each bee gets a row: distance walked, speed, time moving, time in each zone, and time near the wall.
 
-00:02:19.305 --> 00:02:28.843
+00:02:19.124 --> 00:02:28.657
 With more than one bee, Near bee is the share of time within ten millimetres of another bee, with the number of encounters. The pair table breaks it down.
 
-00:02:28.843 --> 00:02:40.251
+00:02:28.658 --> 00:02:40.066
 Beside the map of every track, two charts follow the trial over time: distance from the food, and distance between the bees. The shaded bands are the LED conditions.
 
-00:02:40.253 --> 00:02:45.321
+00:02:40.070 --> 00:02:45.252
 Point at a chart, and the map shows where each bee was at that moment.
 
-00:02:45.321 --> 00:02:56.306
+00:02:45.252 --> 00:02:56.236
 The Data tab saves the tracks and summaries as CSV files, or exports to PER Scorer. Save the project file at the end of each session.
 
-00:02:56.307 --> 00:03:00.779
+00:02:56.237 --> 00:03:00.705
 Each new trial becomes its own recording, ready to compare between groups.
 
-00:03:00.779 --> 00:03:08.370
+00:03:00.705 --> 00:03:08.296
 That's it: draw the arena, set up detection, start the trial, and read the results.

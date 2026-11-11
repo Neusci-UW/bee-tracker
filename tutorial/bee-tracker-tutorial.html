@@ -124,6 +124,7 @@ tr{break-inside:avoid}
     <tr><td>Nearest mm</td><td>Mean distance to the nearest other bee. Shown only with two or more bees.</td></tr>
     <tr><td>Near bee</td><td>The share of time the bee was within 10 mm (centre to centre, about one bee length) of another bee. Shown only with two or more bees.</td></tr>
     <tr><td>Encounters, Mean enc. s</td><td>How many separate times a bee was near another bee, and how long each lasted on average.</td></tr>
+    <tr><td>Crossings, Transit s</td><td>With linked arenas (zones marked <i>Arena area</i>): how often the bee moved from one arena to another, and the time spent between them.</td></tr>
     <tr><td>Merges, Reacq.</td><td>How often bees touched and showed as one blob, and how often a lost bee was picked up again. Both are warnings that per-bee identity may have swapped.</td></tr>
   </table>
   <div class="note"><b>Per bee or all bees?</b> When unmarked bees touch, Bee Tracker can't always tell which is which afterwards. The <b>All bees</b> row doesn't depend on identity and is always safe to use. Use per-bee rows only when each bee is alone in its arena, or the bees are paint-marked and never merged.</div>
@@ -192,9 +193,11 @@ tr{break-inside:avoid}
     <li>Press <b>Track bees</b>. It plays the video fast and samples it; for no skipped samples at all, choose <i>Read frames by: seeking</i> under Detect → Advanced (slower).</li>
   </ol>
   <p>Use <b>New recording</b> for each video. It copies the arena, zones and settings, which suits a fixed camera.</p>
+  <h3>Several cameras and linked arenas</h3>
+  <p>Set <b>Cameras</b> to 2–4, choose a layout and a camera for each tile, and press <b>Start camera</b>: the cameras are joined into one image that works like one camera. Set each tile's <b>zoom</b> so 1 mm is the same size in every tile. For a bee that moves between arenas, draw the arena around the whole image, draw each real arena as a zone, select it and tick <b>Arena area</b>. The results then show <b>Crossings</b>, <b>Transit s</b> (time between arenas) and the first crossing; distances between bees count only bees in the same arena.</p>
 </section>
 
-<section>
+<section class="flow">
   <div class="eyebrow">Part 6</div>
   <h2>How detection works, and fixing it</h2>
   <p>Bee Tracker compares each frame with a picture of the arena without bees (the <b>background</b>). Pixels that differ by more than the <b>threshold</b> are bee; joined pixels form a <b>blob</b>; blobs about the size of one bee are bees, and bigger blobs are bees touching. <b>Set up detection</b> chooses these for you:</p>
@@ -236,6 +239,17 @@ tr{break-inside:avoid}
     <li>Results are also given per LED condition (the segment labels), and the charts shade each condition.</li>
     <li>A <b>light check</b> box drawn over an LED the camera can see measures how late the camera sees each change.</li>
   </ul>
+  <h3>Wiring the LEDs</h3>
+  <p>Each output (<b>AO 0</b>, <b>AO 1</b>) gives a voltage against the shared <b>AO GND</b>, so every circuit returns to AO GND. The outputs give only about 5 mA, so use an LED driver with an analog dimming input, for example a Mean Well LDD-H on a breadboard:</p>
+  <table>
+    <tr><th style="width:1.6in">Connect</th><th>To</th></tr>
+    <tr><td>12 V supply + / −</td><td>The breadboard's red (+) and blue (−) rails</td></tr>
+    <tr><td>LDD-H +Vin / −Vin</td><td>Red rail / blue rail</td></tr>
+    <tr><td>LDD-H DIM</td><td>DAQ AO 0, and a 10 kΩ resistor to the blue rail (keeps the LED off if the DAQ is unplugged)</td></tr>
+    <tr><td>LDD-H +Vout / −Vout</td><td>The LED's + and −</td></tr>
+    <tr><td>DAQ AO GND</td><td>Blue rail (the shared ground)</td></tr>
+  </table>
+  <p>Check the pin order and DIM range in your driver's datasheet. The second LED is the same circuit on AO 1. Avoid drivers that dim with slow PWM: bees can see the flicker.</p>
   <div class="note warn"><b>Check your LED driver.</b> Levels can go up to 10 V, the DAQ's limit. If your LEDs' driver is rated for less (for example 0–5 V), keep every level in the protocol below its rating.</div>
 </section>
 

@@ -139,6 +139,7 @@ tr.pooled td{font-weight:600;background:var(--soft)}
 .pv.sig{color:var(--accent);font-weight:600}
 .selbar{display:flex;flex-direction:column;gap:4px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:6px;padding:6px 8px}
 .selbar label{display:flex;gap:4px;align-items:center}
+.selbar .chk{color:var(--ink);font-size:13px}
 .selbar input[type=number]{width:64px;padding:3px 5px}
 .stack{display:flex;flex-direction:column;gap:8px}
 .tabs.small button{padding:3px 10px;font-size:12px}
@@ -156,6 +157,11 @@ button.stop{background:var(--bad);border-color:var(--bad);color:#fff;font-weight
 .stage .rectag{position:absolute;right:10px;top:10px;background:var(--bad);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;pointer-events:none}
 .stage .stageprog{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.15);pointer-events:none}
 .stage .stageprog i{display:block;height:100%;width:0;background:var(--bad)}
+.camtiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px}
+.camtiles .tile{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.camtiles .tile b{font-family:var(--mono);color:var(--accent)}
+.camtiles select{flex:1;min-width:0}
+.camtiles input{width:58px}
 .checks{display:flex;flex-wrap:wrap;gap:4px 14px}
 .checks label{color:var(--ink);font-size:13px;display:flex;align-items:center;gap:5px}
 .hotkeys{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;color:var(--muted)}
@@ -208,11 +214,14 @@ body.mode-camera .file-only, body.mode-file .cam-only{display:none!important}
         </div>
         <div class="cam-only" style="display:flex;flex-direction:column;gap:8px">
           <div class="row">
-            <label for="c-dev">Camera</label><select id="c-dev" style="min-width:180px;max-width:320px"><option value="">Default camera</option></select>
+            <label for="c-n">Cameras</label><select id="c-n" title="Join several cameras into one image"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+            <select id="c-lay" aria-label="Layout of the cameras" hidden><option value="row">side by side</option><option value="col">stacked</option><option value="grid">2 × 2</option></select>
+            <span id="c-devWrap" class="row" style="gap:8px"><label for="c-dev">Camera</label><select id="c-dev" style="min-width:180px;max-width:320px"><option value="">Default camera</option></select></span>
             <label for="c-res">Size</label><select id="c-res"><option value="640x480">640×480</option><option value="1280x720" selected>1280×720</option><option value="1920x1080">1920×1080</option></select>
             <label for="c-fps">fps</label><input id="c-fps" type="number" value="30" min="1" max="120" style="width:64px">
             <button class="primary" id="bCamOn">Start camera</button><button id="bCamOff" hidden>Stop camera</button>
           </div>
+          <div class="camtiles" id="camTiles" hidden></div>
           <p class="msg" id="camMsg"></p>
           <p class="msg warn" id="camWarn" hidden></p>
           <div class="row" id="camCtl" hidden>
@@ -284,6 +293,7 @@ body.mode-camera .file-only, body.mode-file .cam-only{display:none!important}
             <input id="selNm" maxlength="40" aria-label="Zone name" style="width:120px">
             <select id="selType" aria-label="Shape"><option value="ellipse">circle / ellipse</option><option value="rect">rectangle</option></select>
             <span class="row" id="selGeo" style="gap:6px"><label>centre x<input id="selX" type="number" step="any"></label><label>y<input id="selY" type="number" step="any"></label><label>width<input id="selW" type="number" step="any" min="0"></label><label>height<input id="selH" type="number" step="any" min="0"></label><span class="help" id="selU"></span></span>
+            <label class="chk" id="selAreaL" title="For linked arenas: time in each, crossings between them and time in transit"><input type="checkbox" id="selArea"> Arena area</label>
             <button id="selDup">Duplicate</button><button id="selDel">Remove</button><button class="ghost" id="selNone">Done</button>
           </div>
           <p class="help" id="selHelp"></p>
@@ -638,54 +648,106 @@ $('rtRes').onclick = () => setResTab(false); $('rtCmp').onclick = () => setResTa
 $('helpBtn').onclick = () => { const open = $('helpPop').hidden; $('helpPop').hidden = !open; $('helpBtn').setAttribute('aria-expanded', open); $('helpBtn').classList.toggle('on', open); };
 function setLedWide(on){ S.ui.ledWide = on; save(); document.body.classList.toggle('led-wide', on); $('ledEdit').textContent = on ? 'Done editing' : 'Edit protocol'; $('ledEdit').setAttribute('aria-pressed', on); draw(); }
 function camMsg(t, cls){ $('camMsg').className = 'msg' + (cls ? ' ' + cls : ''); $('camMsg').textContent = t || ''; }
+// Several cameras are joined into one image (side by side, stacked or 2 x 2), which the rest of the page uses as if it
+// were one camera: arena, zones, detection, trials and the saved video all see the joined image.
+// camTrack is the first real camera's track (its name and settings), camTracks all of them; camStream is what the video shows.
+let camTracks = [], joined = null;
+const camCfg = () => (S.ui.cams = Object.assign({n: 1, lay: 'row', ids: [], zoom: []}, S.ui.cams));
+const TILE = i => String.fromCharCode(65 + i);
 async function listCameras(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
   const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const opts = devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('');
   const sel = $('c-dev'), cur = (camTrack && camTrack.getSettings().deviceId) || sel.value || S.ui.camId || '';
-  sel.innerHTML = '<option value="">Default camera</option>' + devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('');
+  sel.innerHTML = '<option value="">Default camera</option>' + opts;
   if([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  const cc = camCfg();
+  for(let i = 0; i < 4; i++) if(!cc.ids[i] || !devs.some(d => d.deviceId === cc.ids[i])) cc.ids[i] = (devs.find(d => !cc.ids.slice(0, i).includes(d.deviceId)) || devs[i] || {}).deviceId || '';
+  renderCamTiles(opts);
   return devs;
+}
+function renderCamTiles(opts){
+  const cc = camCfg(), multi = cc.n > 1;
+  $('c-n').value = String(cc.n); $('c-lay').value = cc.lay; $('c-lay').hidden = !multi; $('c-devWrap').hidden = multi; $('camTiles').hidden = !multi;
+  if(!multi) return;
+  if(opts == null) opts = [...$('c-dev').options].slice(1).map(o => `<option value="${esc(o.value)}">${esc(o.textContent)}</option>`).join('');
+  $('camTiles').innerHTML = Array.from({length: cc.n}, (_, i) => `<div class="tile"><b>${TILE(i)}</b><select data-i="${i}" aria-label="Camera for tile ${TILE(i)}">${opts}</select>`
+    + `<label title="Scale this camera's image so 1 mm spans the same pixels in every tile">zoom <input type="number" data-z="${i}" min="25" max="400" step="5" value="${cc.zoom[i] || 100}">%</label></div>`).join('');
+  $('camTiles').querySelectorAll('select').forEach(x => { x.value = cc.ids[+x.dataset.i] || ''; x.onchange = () => { cc.ids[+x.dataset.i] = x.value; save(); if(camStream && !busy) startCamera(); }; });
+  $('camTiles').querySelectorAll('input').forEach(x => x.onchange = () => { cc.zoom[+x.dataset.z] = Math.max(25, Math.min(400, +x.value || 100)); x.value = cc.zoom[+x.dataset.z]; save(); invalidateBg(); });
+}
+$('c-n').onchange = e => { camCfg().n = +e.target.value; save(); renderCamTiles(); if(camStream && !busy) startCamera(); };
+$('c-lay').onchange = e => { camCfg().lay = e.target.value; save(); if(camStream && !busy) startCamera(); };
+const camError = e => e.name === 'NotAllowedError' ? 'Camera permission was refused. Allow the camera for this page (camera icon in the address bar) and press Start camera again.'
+  : e.name === 'NotFoundError' ? 'No camera found. Check the cable, then press Start camera again.'
+  : e.name === 'NotReadableError' ? 'The camera is busy in another program (OBS, Zoom, the Camera app…), or the USB port can’t carry another camera. Close the other program, or plug the camera into another port.'
+  : e.name === 'OverconstrainedError' ? 'This camera cannot do that size or frame rate. Pick another size.' : 'Could not start the camera: ' + e.message;
+// Draw every camera's newest frame into its tile, each time the first camera has a new frame.
+function joinCameras(streams, w, h, fps, lay){
+  const n = streams.length, cols = lay === 'col' ? 1 : lay === 'grid' && n > 2 ? 2 : n, rows = Math.ceil(n / cols);
+  const cv = document.createElement('canvas'); cv.width = w * cols; cv.height = h * rows;
+  const g = cv.getContext('2d'), cc = camCfg();
+  const vids = streams.map(st => { const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; v.play().catch(() => {}); return v; });
+  let on = true;
+  const paint = () => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+    vids.forEach((v, i) => {
+      if(!v.videoWidth) return;
+      const x = (i % cols) * w, y = Math.floor(i / cols) * h, k = Math.min(w / v.videoWidth, h / v.videoHeight) * (cc.zoom[i] || 100) / 100, dw = v.videoWidth * k, dh = v.videoHeight * k;
+      g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.drawImage(v, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh); g.restore();
+    });
+  };
+  const tick = () => { if(!on) return; paint(); vids[0].requestVideoFrameCallback(tick); };
+  vids[0].requestVideoFrameCallback(tick);
+  const out = cv.captureStream(fps);
+  return {stream: out, size: [cv.width, cv.height], stop(){ on = false; out.getTracks().forEach(t => t.stop()); vids.forEach(v => { v.srcObject = null; }); }};
 }
 async function startCamera(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     camMsg(window.isSecureContext ? 'This browser cannot use cameras. Use Chrome or Edge.' : 'Cameras only work when this page is opened as a file on this computer or from http://localhost.', 'bad'); return;
   }
   stopCamera();
-  const [w, h] = $('c-res').value.split('x').map(Number), fps = Math.max(1, +$('c-fps').value || 30), id = $('c-dev').value;
-  camMsg('Starting camera…');
+  const [w, h] = $('c-res').value.split('x').map(Number), fps = Math.max(1, +$('c-fps').value || 30), cc = camCfg(), n = cc.n;
+  const ids = n > 1 ? cc.ids.slice(0, n) : [$('c-dev').value];
+  if(n > 1 && (ids.some(x => !x) || new Set(ids).size < n)){ camMsg(`Choose a different camera for each of the ${n} tiles.`, 'bad'); return; }
+  camMsg(n > 1 ? `Starting ${n} cameras…` : 'Starting camera…');
+  const streams = [];
   try{
-    camStream = await navigator.mediaDevices.getUserMedia({audio: false, video: {deviceId: id ? {exact: id} : undefined, width: {ideal: w}, height: {ideal: h}, frameRate: {ideal: fps}}});
+    for(const id of ids) streams.push(await navigator.mediaDevices.getUserMedia({audio: false, video: {deviceId: id ? {exact: id} : undefined, width: {ideal: w}, height: {ideal: h}, frameRate: {ideal: fps}}}));
   }catch(e){
-    camStream = null;
-    camMsg(e.name === 'NotAllowedError' ? 'Camera permission was refused. Allow the camera for this page (camera icon in the address bar) and press Start camera again.'
-      : e.name === 'NotFoundError' ? 'No camera found. Check the cable, then press Start camera again.'
-      : e.name === 'NotReadableError' ? 'The camera is busy in another program (OBS, Zoom, the Camera app…). Close it and try again.'
-      : e.name === 'OverconstrainedError' ? 'This camera cannot do that size or frame rate. Pick another size.' : 'Could not start the camera: ' + e.message, 'bad');
-    renderTransport(); return;
+    streams.forEach(st => st.getTracks().forEach(t => t.stop()));
+    camMsg((n > 1 ? `Camera ${TILE(streams.length)}: ` : '') + camError(e), 'bad'); renderTransport(); return;
   }
-  camTrack = camStream.getVideoTracks()[0];
-  camTrack.onended = () => { stopCamera(); camMsg('The camera stopped or was unplugged.', 'bad'); };
+  camTracks = streams.map(st => st.getVideoTracks()[0]); camTrack = camTracks[0];
+  camTracks.forEach((t, i) => t.onended = () => { stopCamera(); camMsg((n > 1 ? `Camera ${TILE(i)} ` : 'The camera ') + 'stopped or was unplugged.', 'bad'); });
+  if(n > 1){ joined = joinCameras(streams, w, h, fps, cc.lay); joined.streams = streams; camStream = joined.stream; }
+  else camStream = streams[0];
   vid.removeAttribute('src'); vid.srcObject = camStream; vid.muted = true;
   try{ await vid.play(); }catch(e){}
   if(!vid.videoWidth) await new Promise(r => vid.addEventListener('loadedmetadata', r, {once: true}));
-  hasVideo = true; videoName = 'camera: ' + camTrack.label;
-  const st = camTrack.getSettings();
-  S.ui.camId = st.deviceId || id; S.ui.camRes = $('c-res').value; S.ui.camFps = fps;
+  hasVideo = true; videoName = 'camera: ' + (n > 1 ? camTracks.map((t, i) => TILE(i) + ' ' + t.label).join(', ') : camTrack.label);
+  const sts = camTracks.map(t => t.getSettings()), st = sts[0];
+  S.ui.camId = n > 1 ? S.ui.camId : (st.deviceId || ids[0]); S.ui.camRes = $('c-res').value; S.ui.camFps = fps;
   const r = rec(); if(!r.result){ r.vw = vid.videoWidth; r.vh = vid.videoHeight; }
   await listCameras();
-  const got = st.frameRate ? Math.round(st.frameRate * 10) / 10 : null, slow = got && got < fps - 0.5;
-  camMsg(`${camTrack.label || 'Camera'}: ${vid.videoWidth}×${vid.videoHeight}` + (got ? ` at ${got} fps` : '') + '.' + (slow ? ` That is less than the ${fps} fps asked for: try a smaller size.` : ''), slow ? 'warn' : 'good');
+  const rates = sts.map(x => x.frameRate ? Math.round(x.frameRate * 10) / 10 : null), slow = rates.some(x => x && x < fps - 0.5);
+  camMsg((n > 1 ? `${n} cameras joined ${cc.lay === 'col' ? 'one above the other' : cc.lay === 'grid' ? 'in a 2 × 2 grid' : 'side by side'}: ${vid.videoWidth}×${vid.videoHeight}`
+      + (rates.every(x => x) ? ` at ${rates.join(', ')} fps` : '') + '. Use each tile’s zoom so 1 mm spans the same pixels in every tile.'
+      : `${camTrack.label || 'Camera'}: ${vid.videoWidth}×${vid.videoHeight}` + (rates[0] ? ` at ${rates[0]} fps` : '') + '.')
+    + (slow ? ` That is less than the ${fps} fps asked for: try a smaller size${n > 1 ? ', or plug the cameras into different USB ports' : ''}.` : ''), slow ? 'warn' : 'good');
   renderCamControls(); bgCache = null; preview = null; changed(); startPreviewLoop();
 }
 function stopCamera(){
   if(!camStream) return;
-  camStream.getTracks().forEach(t => t.stop());
-  camStream = null; camTrack = null; vid.srcObject = null; hasVideo = false; videoName = ''; preview = null; bgCache = null;
+  if(joined){ joined.stop(); joined.streams.forEach(st => st.getTracks().forEach(t => t.stop())); joined = null; }
+  else camStream.getTracks().forEach(t => t.stop());
+  camStream = null; camTrack = null; camTracks = []; vid.srcObject = null; hasVideo = false; videoName = ''; preview = null; bgCache = null;
   $('camCtl').hidden = true; $('camWarn').hidden = true; renderAll();
 }
 $('bCamOn').onclick = startCamera; $('bCamOff').onclick = () => { stopCamera(); camMsg(''); };
 ['c-dev','c-res','c-fps'].forEach(id => $(id).onchange = () => { if(camStream && !busy) startCamera(); });
 if(navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => listCameras());
+// Exposure, white balance and focus: the first camera's controls, applied to every camera.
 function renderCamControls(){
   const caps = camTrack && camTrack.getCapabilities ? camTrack.getCapabilities() : {};
   const canLock = ['exposureMode','whiteBalanceMode','focusMode'].some(k => (caps[k] || []).includes('manual'));
@@ -697,7 +759,7 @@ function renderCamControls(){
   $('camWarn').hidden = !camTrack || canLock;
   $('camWarn').textContent = 'The browser cannot change this camera’s exposure or white balance. Turn off the automatic settings in the camera’s own software (e.g. AMCap, OBS or v4l2-ctl) before opening this page.';
 }
-async function applyCam(c){ try{ await camTrack.applyConstraints({advanced: [c]}); return true; }catch(e){ toast('The camera refused that setting.'); return false; } }
+async function applyCam(c){ try{ await Promise.all(camTracks.map(t => t.applyConstraints({advanced: [c]}))); return true; }catch(e){ toast('The camera refused that setting.'); return false; } }
 $('c-lock').onchange = async e => {
   const caps = camTrack.getCapabilities(), m = e.target.checked ? 'manual' : 'continuous', c = {};
   ['exposureMode','whiteBalanceMode','focusMode'].forEach(k => { if((caps[k] || []).includes(m)) c[k] = m; });
@@ -835,7 +897,7 @@ function renderSel(){
   $('selName').textContent = zone ? 'Zone' : light ? 'Light check' : 'Arena';
   $('selNm').hidden = !zone; if(zone && document.activeElement !== $('selNm')) $('selNm').value = s.zone.name;
   $('selType').hidden = light; $('selType').value = s.shape.type;
-  $('selGeo').hidden = !zone; $('selDup').hidden = !zone;
+  $('selGeo').hidden = !zone; $('selDup').hidden = !zone; $('selAreaL').hidden = !zone; if(zone) $('selArea').checked = !!s.zone.area;
   if(zone){
     const g = zoneGeo(r, s.shape), d = unitOf(r) === 'mm' ? 1 : 0;
     [['selX', g.x], ['selY', g.y], ['selW', g.w], ['selH', g.h]].forEach(([id, v]) => { if(document.activeElement !== $(id)) $(id).value = +v.toFixed(d); });
@@ -869,6 +931,7 @@ function removeSelected(){
 }
 const zoneName = (c, base) => { const used = new Set(c.zones.map(z => z.name)); if(!used.has(base)) return base; let i = 2; while(used.has(base + ' ' + i)) i++; return base + ' ' + i; };
 $('selDel').onclick = removeSelected;
+$('selArea').onchange = e => { const s = selShape(cfg()); if(s && s.zone){ s.zone.area = e.target.checked; changed(); } };
 $('selNone').onclick = () => pick(null);
 $('selDup').onclick = () => {
   const c = cfg(), s = selShape(c); if(!s || !s.zone) return;
@@ -1174,7 +1237,7 @@ async function withBusy(label, fn){
   finally{ busy = null; $('prog').hidden = true; $('stageProg').hidden = true; $('recTag').hidden = true; renderBusy(); if($('runMsg').textContent === label + '…') $('runMsg').textContent = ''; }
 }
 function renderBusy(){
-  ['bRun','bAuto','bAutoReset','bTest','bMeasure','bBg','bBgEmpty','bBgLearn','bArena','bZone','pickVid','newRec','iJson','newProj','c-dev','c-res','c-fps','l-dur','l-save','t-0now','t-1now','tWhole'].forEach(id => $(id).disabled = !!busy);
+  ['bRun','bAuto','bAutoReset','bTest','bMeasure','bBg','bBgEmpty','bBgLearn','bArena','bZone','pickVid','newRec','iJson','newProj','c-dev','c-res','c-fps','c-n','c-lay','l-dur','l-save','t-0now','t-1now','tWhole'].forEach(id => $(id).disabled = !!busy);
   $('bRun').hidden = !!busy; $('tabNote').hidden = !(busy && busy.label === 'Tracking');
   renderLedPanel();
   $('bCancel').hidden = !busy; renderTransport();
@@ -1570,7 +1633,7 @@ async function runLive(){
   const achievedHz = (sess.res.t.length - 1) / Math.max(1e-6, out.tEnd), camFps = (out.frames + out.missed) / Math.max(1e-6, out.tEnd);
   r.result = sess.finish({method: 'live', hz, t0: 0, t1: +out.tEnd.toFixed(3), expected: Math.floor(out.tEnd * Math.min(hz, camFps)) + 1,
     achievedHz: +achievedHz.toFixed(2), cameraFps: +camFps.toFixed(2), missedFrames: out.missed, seconds: +out.wall.toFixed(1),
-    camera: camTrack ? camTrack.label : '', size: vid.videoWidth + 'x' + vid.videoHeight});
+    camera: camTrack ? (camTracks.length > 1 ? camTracks.map((t, i) => TILE(i) + ': ' + t.label).join('; ') : camTrack.label) : '', cameras: camTracks.length || 1, size: vid.videoWidth + 'x' + vid.videoHeight});
   r.result.videoName = videoFile; r.videoName = videoFile; r.duration = out.tEnd;
   let nEv = 0;
   if(ag && ag.started){
@@ -1602,8 +1665,16 @@ function recMetrics(r){
   const nn = C.nearestNeighbour(tracksOf(r), sc);
   bees.forEach((b, k) => { const T = r.result.tracks[k]; b.nn = nn[k]; b.merges = C.episodes(T.mer); b.reacq = T.rea.reduce((a, v) => a + v, 0); });
   const pooled = pool(bees, zones), R0 = r.result;
-  // distance between every pair of bees (smoothed positions), and time spent close to another bee
+  // linked arenas: which arena area each bee is in at each sample
+  const areas = r.cfg.zones.filter(z => z.area), inArea = areas.length > 1 ? bees.map(b => b.smooth.x.map((x, i) => x == null ? null : areas.findIndex(z => C.inside(z.shape, x, b.smooth.y[i])))) : null;
+  // distance between every pair of bees (smoothed positions), and time spent close to another bee; with linked arenas,
+  // only while both bees are in the same arena
   const pairs = C.pairDistances(bees.map(b => b.smooth.x), bees.map(b => b.smooth.y), sc);
+  if(inArea){
+    pairs.forEach(p => { p.d = p.d.map((d, i) => d != null && inArea[p.a][i] >= 0 && inArea[p.a][i] === inArea[p.b][i] ? d : null); });
+    bees.forEach((b, k) => { let sum = 0, n = 0; R0.t.forEach((_, i) => { let best = null; pairs.forEach(p => { if((p.a === k || p.b === k) && p.d[i] != null && (best == null || p.d[i] < best)) best = p.d[i]; }); if(best != null){ sum += best; n++; } }); b.nn = n ? sum / n : null; });
+    const nns = bees.filter(b => b.nn != null); pooled.nn = nns.length ? nns.reduce((a, b) => a + b.nn, 0) / nns.length : null;
+  }
   const soc = bees.length > 1 ? C.social(R0.t, pairs, bees.length, m.closeDist, m.maxGap, m.minBout, m.minBout) : null;
   bees.forEach((b, k) => { b.social = soc ? soc.bees[k] : null; });
   if(soc){
@@ -1611,6 +1682,12 @@ function recMetrics(r){
     const enc = soc.pairs.reduce((a, x) => a + x.encounters, 0), encT = soc.pairs.reduce((a, x) => a + x.runs.reduce((q, rr) => q + rr[1] - rr[0], 0), 0);
     pooled.social = {close, measured: meas, frac: meas > 0 ? close / meas : null, encounters: enc, meanEncounter: enc ? encT / enc : null};
   } else pooled.social = null;
+  // linked arenas: crossings between the zones marked as arena areas, and time in transit
+  if(inArea){
+    bees.forEach((b, k) => { b.cross = C.crossings(R0.t, inArea[k]); });
+    const firsts = bees.map(b => b.cross.first).filter(Boolean).sort((a, b) => a.t0 - b.t0);
+    pooled.cross = {n: bees.reduce((a, b) => a + b.cross.n, 0), transit: bees.reduce((a, b) => a + b.cross.transit, 0), first: firsts[0] || null};
+  }
   let light = null;
   const st = r.result.stim;
   if(st && st.events){
@@ -1636,7 +1713,7 @@ function recMetrics(r){
     }
     light = {intervals, rows, check};
   }
-  return {bees, pooled, zones, unit: unitOf(r), light, pairs, socialPairs: soc ? soc.pairs : []};
+  return {bees, pooled, zones, unit: unitOf(r), light, pairs, socialPairs: soc ? soc.pairs : [], areas: areas.length > 1 ? areas.map(z => z.name) : null};
 }
 // All bees together: sums and time-weighted means that don't depend on which bee is which.
 function pool(bees, zones){
@@ -1700,7 +1777,7 @@ function renderSettings(){
   const zl = $('zones'); zl.innerHTML = '';
   c.zones.forEach((z, i) => {
     const d = document.createElement('div'); d.className = 'zone';
-    d.innerHTML = `<span class="sw" style="background:${ZCOL[i % ZCOL.length]}"></span><input value="${esc(z.name)}" aria-label="Zone name"><button class="ghost" data-a="edit" title="Select it on the video to move, resize or reshape it">${z.shape.type === 'rect' ? 'rect' : 'ellipse'}</button><button class="ghost" data-a="del" title="Remove zone">✕</button>`;
+    d.innerHTML = `<span class="sw" style="background:${ZCOL[i % ZCOL.length]}"></span><input value="${esc(z.name)}" aria-label="Zone name"><button class="ghost" data-a="edit" title="Select it on the video to move, resize or reshape it">${z.area ? 'arena · ' : ''}${z.shape.type === 'rect' ? 'rect' : 'ellipse'}</button><button class="ghost" data-a="del" title="Remove zone">✕</button>`;
     d.querySelector('input').onchange = e => { const v = e.target.value.trim(); if(!v || c.zones.some(o => o !== z && o.name === v)){ e.target.value = z.name; toast('Zone names must be unique.'); return; } z.name = v; changed(); };
     d.querySelector('[data-a=del]').onclick = () => { c.zones.splice(i, 1); changed(); };
     d.querySelector('[data-a=edit]').onclick = () => { if(drawMode) setDrawMode(drawMode); pick({kind: 'zone', id: z.id}); };
@@ -1736,14 +1813,17 @@ function renderResults(){
   if(r.cfg.nBees > 1 && M.pooled.merges) notes.push(`${M.pooled.merges} merge episode${M.pooled.merges === 1 ? '' : 's'}: identities may have swapped, so per-bee rows are unreliable. The All bees row is not affected.`);
   if(d.extraMax) notes.push(`Up to ${d.extraMax} extra blob${d.extraMax === 1 ? '' : 's'} per frame were ignored: check the threshold with Test on this frame.`);
   warn.hidden = !notes.length; warn.textContent = notes.join(' ');
-  const zh = M.zones.map(z => `<th class="num">${esc(z.name)}</th>`).join(''), soc = M.bees.length > 1, cd = r.cfg.met.closeDist;
+  const zh = M.zones.map(z => `<th class="num">${esc(z.name)}</th>`).join(''), soc = M.bees.length > 1, cd = r.cfg.met.closeDist, ar = M.areas;
+  const crossTxt = c => c && c.first ? `${num(c.first.t0, 1)} <span class="help">(${esc(ar[c.first.from])}→${esc(ar[c.first.to])})</span>` : '—';
+  const ah = ar ? `<th class="num" title="Moves from one arena area to another">Crossings</th><th class="num" title="Time between leaving one arena area and arriving in another">Transit s</th><th class="num">First crossing s</th>` : '';
   const sh = soc ? `<th class="num" title="Share of tracked time within ${cd} ${u} of another bee (Results → Settings)">Near bee</th><th class="num" title="Separate times close to another bee">Encounters</th><th class="num">Mean enc. s</th>` : '';
   const row = (name, b, color, cls) => `<tr class="${cls || ''}"><td>${color ? `<span class="dot" style="background:${color}"></span>` : ''}${name}</td>`
     + `<td class="num">${pct(b.coverage)}</td><td class="num">${num(b.tracked, 1)}</td><td class="num">${num(b.distance, u === 'mm' ? 0 : 0)}</td><td class="num">${num(b.meanSpeed, 1)}</td><td class="num">${pct(b.fracMoving)}</td>`
     + `<td class="num">${num(b.p95Speed, 1)}</td>` + b.zones.map(z => `<td class="num">${pct(z.frac)} <span class="help">(${z.visits})</span></td>`).join('')
     + (soc ? `<td class="num">${num(b.nn, 0)}</td>` : '') + (soc ? `<td class="num">${pct(b.social && b.social.frac)}</td><td class="num">${b.social ? b.social.encounters : '—'}</td><td class="num">${num(b.social && b.social.meanEncounter, 1)}</td>` : '')
+    + (ar ? `<td class="num">${b.cross ? b.cross.n : '—'}</td><td class="num">${num(b.cross && b.cross.transit, 1)}</td><td class="num">${crossTxt(b.cross)}</td>` : '')
     + `<td class="num">${b.merges}</td><td class="num">${b.reacq}</td></tr>`;
-  tbl.innerHTML = `<thead><tr><th>Bee</th><th class="num">Found</th><th class="num">Tracked s</th><th class="num">Dist ${u}</th><th class="num">Speed ${u}/s</th><th class="num">Moving</th><th class="num">95th ${u}/s</th>${zh}${soc ? `<th class="num">Nearest ${u}</th>` : ''}${sh}<th class="num">Merges</th><th class="num">Reacq.</th></tr></thead><tbody>`
+  tbl.innerHTML = `<thead><tr><th>Bee</th><th class="num">Found</th><th class="num">Tracked s</th><th class="num">Dist ${u}</th><th class="num">Speed ${u}/s</th><th class="num">Moving</th><th class="num">95th ${u}/s</th>${zh}${soc ? `<th class="num">Nearest ${u}</th>` : ''}${sh}${ah}<th class="num">Merges</th><th class="num">Reacq.</th></tr></thead><tbody>`
     + M.bees.map((b, k) => row('Bee ' + (k + 1), b, COLORS[k % COLORS.length])).join('')
     + (M.bees.length > 1 ? row('All bees', M.pooled, null, 'pooled') : '') + '</tbody>';
   renderPairs(r, M);
@@ -1970,6 +2050,9 @@ function metricDefs(){
       {id: 'nn', label: 'Nearest-neighbour distance', get: b => b.nn, unit: true},
       {id: 'social', label: 'Time near another bee', get: b => b.social ? b.social.frac : null, pct: true},
       {id: 'encounters', label: 'Encounters with other bees', get: b => b.social ? b.social.encounters : null}] : []),
+    ...(S.recs.some(r => r.result && r.cfg.zones.filter(z => z.area).length > 1) ? [
+      {id: 'crossings', label: 'Crossings between arenas', get: b => b.cross ? b.cross.n : null},
+      {id: 'transit', label: 'Time in transit (s)', get: b => b.cross ? b.cross.transit : null}] : []),
   ];
 }
 function median(a){ const s = a.slice().sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2) : null; }
@@ -2091,7 +2174,7 @@ function tracksCSV(r){
   const U = unitOf(r), n = R.tracks.length, drawn = r.cfg.zones;
   const pd = (k, j, i) => { const p = M.pairs.find(q => (q.a === k && q.b === j) || (q.a === j && q.b === k)); return p ? p.d[i] : null; };
   const head = ['experiment','recording','group','video','bee','t_s','detected','x_px','y_px','x_mm','y_mm','x_smooth_px','y_smooth_px','speed_' + U + '_s','merged','reacquired', ...zones.map(z => 'in_' + slug(z.name)),
-    ...drawn.map(z => 'to_' + slug(z.name) + '_' + U), ...(n > 1 ? ['nearest_bee_' + U, ...R.tracks.map((_, j) => 'to_bee' + (j + 1) + '_' + U)] : []), ...(ivs ? ['led'] : []), ...(R.light ? ['light_check'] : [])];
+    ...(M.areas ? ['arena_area'] : []), ...drawn.map(z => 'to_' + slug(z.name) + '_' + U), ...(n > 1 ? ['nearest_bee_' + U, ...R.tracks.map((_, j) => 'to_bee' + (j + 1) + '_' + U)] : []), ...(ivs ? ['led'] : []), ...(R.light ? ['light_check'] : [])];
   const rows = [head];
   R.tracks.forEach((T, k) => {
     const sm = M.bees[k].smooth;
@@ -2101,6 +2184,7 @@ function tracksCSV(r){
         det && sc ? ((x - a.x) * sc.sx).toFixed(2) : '', det && sc ? ((y - a.y) * sc.sy).toFixed(2) : '',
         sm.x[i] == null ? '' : sm.x[i].toFixed(1), sm.y[i] == null ? '' : sm.y[i].toFixed(1), sm.speed[i] == null ? '' : sm.speed[i].toFixed(2),
         T.mer[i], T.rea[i], ...zones.map(z => sm.x[i] == null ? '' : ((z.test ? z.test(sm.x[i], sm.y[i]) : C.inside(z.shape, sm.x[i], sm.y[i])) ? 1 : 0)),
+        ...(M.areas ? [sm.x[i] == null ? '' : (r.cfg.zones.filter(z => z.area).find(z => C.inside(z.shape, sm.x[i], sm.y[i])) || {}).name || ''] : []),
         ...drawn.map(z => sm.x[i] == null ? '' : C.zoneDistance(z.shape, sm.x[i], sm.y[i], true, sc).toFixed(2)),
         ...(n > 1 ? (() => { const ds = R.tracks.map((_, j) => j === k ? null : pd(k, j, i)), v = ds.filter(d => d != null);
           return [v.length ? Math.min(...v).toFixed(2) : '', ...ds.map(d => d == null ? '' : d.toFixed(2))]; })() : []),
@@ -2111,8 +2195,8 @@ function tracksCSV(r){
 }
 function summaryCSV(){
   const zoneNames = [...new Set(S.recs.flatMap(r => r.result ? zoneList(r).map(z => z.name) : []))];
-  const many = S.recs.some(r => r.result && r.result.tracks.length > 1);
-  const head = ['experiment','experimenter','date','recording','group','video','n_bees','bee','start_s','end_s','samples','units','found_frac','tracked_s','distance','mean_speed','speed_p95','moving_frac','nearest_neighbour',...(many ? ['near_bee_frac','near_bee_s','encounters','mean_encounter_s'] : []),'merges','reacquired',
+  const many = S.recs.some(r => r.result && r.result.tracks.length > 1), linked = S.recs.some(r => r.result && r.cfg.zones.filter(z => z.area).length > 1);
+  const head = ['experiment','experimenter','date','recording','group','video','n_bees','bee','start_s','end_s','samples','units','found_frac','tracked_s','distance','mean_speed','speed_p95','moving_frac','nearest_neighbour',...(many ? ['near_bee_frac','near_bee_s','encounters','mean_encounter_s'] : []),...(linked ? ['crossings','transit_s','first_crossing_s','first_crossing'] : []),'merges','reacquired',
     ...zoneNames.flatMap(z => [slug(z) + '_frac', slug(z) + '_s', slug(z) + '_visits']), 'threshold','polarity','samples_per_s','smoothing_s','moving_threshold',...(many ? ['close_within'] : []),'method'];
   const rows = [head];
   S.recs.forEach(r => {
@@ -2122,6 +2206,7 @@ function summaryCSV(){
       rows.push([S.session.experiment, S.session.experimenter, S.session.date, r.label, r.group, R.videoName || r.videoName, r.cfg.nBees, who, R.diag.t0.toFixed(2), R.diag.t1.toFixed(2), R.t.length, M.unit,
         b.coverage.toFixed(4), b.tracked.toFixed(2), b.distance.toFixed(2), b.meanSpeed == null ? '' : b.meanSpeed.toFixed(3), b.p95Speed == null ? '' : b.p95Speed.toFixed(3), b.fracMoving == null ? '' : b.fracMoving.toFixed(4),
         b.nn == null ? '' : b.nn.toFixed(2), ...(!many ? [] : b.social ? [b.social.frac == null ? '' : b.social.frac.toFixed(4), b.social.close.toFixed(2), b.social.encounters, b.social.meanEncounter == null ? '' : b.social.meanEncounter.toFixed(2)] : ['', '', '', '']),
+        ...(!linked ? [] : b.cross ? [b.cross.n, b.cross.transit.toFixed(2), b.cross.first ? b.cross.first.t0.toFixed(2) : '', b.cross.first ? M.areas[b.cross.first.from] + '>' + M.areas[b.cross.first.to] : ''] : ['', '', '', '']),
         b.merges, b.reacq, ...zs, u.det.thr, u.det.polarity, u.trk.hz, r.cfg.met.smooth, r.cfg.met.moveThr, ...(many ? [r.cfg.met.closeDist] : []), R.diag.method]);
     };
     M.bees.forEach((b, k) => line(k + 1, b));
@@ -2158,6 +2243,7 @@ function perScorerProject(){
   const keys = 'mqwertyuiopasdfghjklxcv1234567890'.split('');
   const behs = [{id: 'moving', name: 'Moving', key: keys.shift(), type: 'state', role: 'behavior', color: PAL[0]},
     ...zoneNames.map((z, i) => ({id: 'zone_' + slug(z), name: 'In ' + z, key: keys.shift(), type: 'state', role: 'behavior', color: PAL[(i + 1) % PAL.length]}))];
+  if(S.recs.some(r => r.result && r.cfg.zones.filter(z => z.area).length > 1)) behs.push({id: 'transit', name: 'In transit', key: keys.shift(), type: 'state', role: 'behavior', color: PAL[(zoneNames.length + 3) % PAL.length]});
   if(S.recs.some(r => r.result && r.result.tracks.length > 1)) behs.push({id: 'near_bee', name: 'Near another bee', key: keys.shift(), type: 'state', role: 'behavior', color: PAL[(zoneNames.length + 1) % PAL.length]});
   const ledKeys = [...new Set(S.recs.flatMap(r => { const M = recMetrics(r); return M && M.light ? M.light.rows.map(x => x.key).filter(k => k !== 'No stimulus') : []; }))];
   ledKeys.forEach((k, i) => behs.push({id: 'led_' + slug(k), name: 'LED ' + k, key: keys.shift() || '', type: 'state', role: 'stimulus', color: PAL[(zoneNames.length + 2 + i) % PAL.length]}));
@@ -2168,6 +2254,7 @@ function perScorerProject(){
       const events = b.runs.moving.map(([t0, t1]) => ({id: uid(), bid: 'moving', t0: +t0.toFixed(3), t1: +t1.toFixed(3)}));
       if(M.light) M.light.intervals.forEach(iv => { if(iv.key !== 'No stimulus') events.push({id: uid(), bid: 'led_' + slug(iv.key), t0: +iv.t0.toFixed(3), t1: +iv.t1.toFixed(3)}); });
       M.zones.forEach((z, zi) => b.runs.zones[zi].forEach(([t0, t1]) => events.push({id: uid(), bid: 'zone_' + slug(z.name), t0: +t0.toFixed(3), t1: +t1.toFixed(3)})));
+      if(b.cross) b.cross.list.forEach(c => events.push({id: uid(), bid: 'transit', t0: +c.t0.toFixed(3), t1: +c.t1.toFixed(3)}));
       if(b.social) b.social.runs.forEach(([t0, t1]) => events.push({id: uid(), bid: 'near_bee', t0: +t0.toFixed(3), t1: +t1.toFixed(3)}));
       events.sort((a, c) => a.t0 - c.t0);
       bees.push({id: uid(), label: r.label + (M.bees.length > 1 ? ' · bee ' + (k + 1) : ''), holder: '', group: r.group, clock: 0, events,
@@ -2230,6 +2317,7 @@ function toast(t){ if(typeof t !== 'string') return; const el = $('toast'); el.t
 window.__beeTracker = {get state(){ return S; }, ledCSV: () => ledCSV(), stimCSV: () => stimCSV(), led: AG, recMetrics: r => recMetrics(r || rec()), tracksCSV: () => tracksCSV(rec()), summaryCSV, perScorerProject, get busy(){ return !!busy; }, get videoReady(){ return ready(); }};
 
 applyMode();
+renderCamTiles();
 setDetTab(!!S.ui.detAdv); setResTab(!!S.ui.resCmp); setLedWide(!!S.ui.ledWide);
 renderAll();
 requestAnimationFrame(frame);

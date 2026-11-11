@@ -434,6 +434,18 @@ function social(t, pairs, n, thr, maxGap, minBout, mergeGap){
   };
   return {bees: bees.map(fin), pairs: prs.map(fin)};
 }
+// Moves between arena areas (zones marked as arenas, e.g. two linked arenas). area[i]: the index of the area the bee
+// is in at sample i, -1 in none, null if not seen. Each change of area is a crossing; the time from last being seen in
+// one area to first being seen in the next is time in transit (in a tunnel neither camera sees, say).
+function crossings(t, area){
+  const out = []; let last = null, lastT = null;
+  for(let i = 0; i < t.length; i++){
+    const a = area[i]; if(a == null || a < 0) continue;
+    if(last != null && a !== last) out.push({from: last, to: a, t0: lastT, t1: t[i]});
+    last = a; lastT = t[i];
+  }
+  return {list: out, n: out.length, transit: out.reduce((x, c) => x + c.t1 - c.t0, 0), first: out.length ? out[0] : null};
+}
 /* ---------- LEDs (stimuli logged by Argus) ---------- */
 const fmtLevel = v => (Math.round(v * 100) / 100) + ' V';
 // Split [0, tEnd] into stretches by which LED outputs are on, and at what level.
@@ -702,7 +714,7 @@ function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && 
 
 return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
   findBlobs, splitBlob, detect, estimateBeeArea, autoDetect, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
-  zoneDistance, pairDistances, social,
+  zoneDistance, pairDistances, social, crossings,
   lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel,
   LED_FNS, ledFn, parseFormula, hash01, ledFnProblems, ledEval, ledSamples, ledRange, ledDescribe, ledIsOff, ledConditionName, ledSequence, ledPlayed};
 })();
