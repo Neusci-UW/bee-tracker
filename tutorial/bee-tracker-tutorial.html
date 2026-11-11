@@ -240,16 +240,18 @@ tr{break-inside:avoid}
     <li>A <b>light check</b> box drawn over an LED the camera can see measures how late the camera sees each change.</li>
   </ul>
   <h3>Wiring the LEDs</h3>
-  <p>Each output (<b>AO 0</b>, <b>AO 1</b>) gives a voltage against the shared <b>AO GND</b>, so every circuit returns to AO GND. The outputs give only about 5 mA, so use an LED driver with an analog dimming input, for example a Mean Well LDD-H on a breadboard:</p>
+  <p>Each output (<b>AO 0</b>, <b>AO 1</b>) gives a voltage against the shared <b>AO GND</b>, so every circuit returns to AO GND. The outputs give only about 5 mA, so each LED needs a driver whose current follows the voltage. The cheapest is an <b>op-amp current sink</b>: an LM358, a logic-level MOSFET (IRLZ44N) and a 1 Ω resistor, on a breadboard. LED current = control voltage / 1 Ω, so brightness follows the protocol exactly, without flicker.</p>
   <table>
-    <tr><th style="width:1.6in">Connect</th><th>To</th></tr>
-    <tr><td>12 V supply + / −</td><td>The breadboard's red (+) and blue (−) rails</td></tr>
-    <tr><td>LDD-H +Vin / −Vin</td><td>Red rail / blue rail</td></tr>
-    <tr><td>LDD-H DIM</td><td>DAQ AO 0, and a 10 kΩ resistor to the blue rail (keeps the LED off if the DAQ is unplugged)</td></tr>
-    <tr><td>LDD-H +Vout / −Vout</td><td>The LED's + and −</td></tr>
+    <tr><th style="width:2in">Connect</th><th>To</th></tr>
+    <tr><td>5 V supply + / −</td><td>The breadboard's red (+) and blue (−) rails</td></tr>
     <tr><td>DAQ AO GND</td><td>Blue rail (the shared ground)</td></tr>
+    <tr><td>DAQ AO 0</td><td>15 kΩ to the op-amp's + input; 1 kΩ from that input to the blue rail (scales 5 V to 0.31 V, and keeps the LED off if the DAQ is unplugged)</td></tr>
+    <tr><td>Op-amp output</td><td>100 Ω to the MOSFET's gate</td></tr>
+    <tr><td>MOSFET source</td><td>The op-amp's − input, and 1 Ω to the blue rail</td></tr>
+    <tr><td>MOSFET drain / LED</td><td>Drain to the LED's −; the LED's + to the red rail</td></tr>
+    <tr><td>LM358 power</td><td>Red and blue rails, with 0.1 µF across them</td></tr>
   </table>
-  <p>Check the pin order and DIM range in your driver's datasheet. The second LED is the same circuit on AO 1. Avoid drivers that dim with slow PWM: bees can see the flicker.</p>
+  <p>The second LED is the same circuit on AO 1, using the chip's other op-amp. With these values, 5 V gives 312 mA. A Mean Well LDD-H is <b>on/off only</b> (it switches above about 2.5 V and dims by PWM, which bees can see as flicker): use it only for fixed-brightness on/off protocols.</p>
   <div class="note warn"><b>Check your LED driver.</b> Levels can go up to 10 V, the DAQ's limit. If your LEDs' driver is rated for less (for example 0–5 V), keep every level in the protocol below its rating.</div>
 </section>
 
