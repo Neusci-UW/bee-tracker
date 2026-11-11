@@ -4,22 +4,38 @@ Track free-moving bees in an arena from a video recording. You draw the arena, a
 
 Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It runs in the browser, uploads nothing, and needs no install. It reuses PER Scorer's look, video loading, frame stepping, file saving and rank tests.
 
+## Guides
+
+| Page | What it is |
+|---|---|
+| [`index.html`](index.html) | Start page linking the guides and the tracker |
+| [`bee-walkthrough.html`](bee-walkthrough.html) | A narrated 3-minute video of one live trial, with captions and chapters |
+| [`Bee-Tracker-Student-Tutorial.pdf`](Bee-Tracker-Student-Tutorial.pdf) | Student tutorial: setup, step-by-step trials, detection, LEDs, results, practice questions and a reference card. Source in `tutorial/`. |
+
 ## Use
 
-1. Open `bee-tracker.html` in Chrome or Edge, then open a video (MP4/H.264 is safest).
-2. Press **Draw arena** and drag a box around the arena floor (round or rectangular). Enter the arena's real **width in mm** to set the scale.
-3. Set **Bees in arena**.
-4. Pause on a frame where every bee is visible and apart. Press **Test on this frame**: detected pixels show in magenta, with a cross on each bee. Move the **threshold** until each bee is one solid blob and nothing else lights up.
-5. Press **Measure bee size**. This is needed to split bees that touch.
-6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To remove the arena, a zone or the light check, click its outline on the video, then **Remove** (or press Delete).
-7. Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
-8. Export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
+1. Open `bee-tracker.html` in Chrome or Edge, choose **Saved video**, then open a video (MP4/H.264 is safest).
+2. **Setup** tab: press **Draw arena** and drag a box around the arena floor (round or rectangular). Enter the arena's real **width in mm** to set the scale, and set **Bees in arena**.
+3. **Detect** tab: pause on a frame where every bee is visible and apart, and press **Set up detection**. It builds the background, then works out which way the bees differ from it, a threshold well above the camera noise, the size of one bee (needed to split bees that touch) and a processing size, and says whether it found every bee. Detected pixels show in magenta, with a cross on each bee. If it gets something wrong (shadows, reflections), change that value under **Advanced**: it's then marked *set by you* and kept the next time; **Reset all to auto** undoes that.
+4. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To edit the arena, a zone or the light check, click its outline on the video: drag it to move it, drag a handle to resize it (Shift keeps a circle round), nudge it with the arrow keys, or set a zone's name, shape, centre and size in the bar under the video. **Duplicate** copies a zone; **Remove** (or Delete) removes the shape.
+5. Under the video, **Start here** and **End here** set the part to track (shown on the seek bar). Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
+6. **Data** tab: export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
 
-Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**.
+With **Live camera**, press **Set up detection** with the bees in the arena (it learns the background while they move, or captures the empty arena if you choose that under Advanced), then use the bar under the video: trial **Length**, **Save video**, **LEDs**, and **Start trial**. The bar shows what's still missing (camera, arena, detection, LEDs), and the video shows the trial's time and progress while it runs. Samples per second, the maximum walking speed and how frames are read are under **Detect → Advanced**.
+
+Beside the track map, two charts show the trial over time: each bee's **distance from a zone** (pick the zone, and measure to its edge, 0 inside, or its centre) and the **distance between bees** (every pair, or with many bees the median and range of each bee's nearest neighbour). LED conditions show as shaded bands. Point at a chart to see where each bee was at that moment on the map; with a saved video, click to jump the video there. With two or more bees, **Near bee** is the share of tracked time each bee spent within a set distance of another bee (*Close to another bee within*, under Results → Settings, default 10 mm centre to centre, about one bee length), with the number of **encounters** and their mean length, plus a **By pair** table (time close, encounters, first contact). These are in the Summary CSV, Compare recordings and the PER Scorer export (*Near another bee*); the Tracks CSV gains each bee's distance to every zone and to every other bee.
+
+Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**, the second tab of the results. The **?** in the header lists the keyboard shortcuts.
+
+## Several cameras and linked arenas
+
+Under **Live camera**, set **Cameras** to 2, 3 or 4 and choose a layout (side by side, stacked or 2 × 2) and a camera for each tile (A, B, …). Bee Tracker joins them into one image, and everything else (arena, zones, detection, trials, results, the saved trial video) works on that image as if it were one camera. Each tile has a **zoom**: set it so 1 mm spans the same pixels in every tile, so distances are right across tiles. Tiles are at most one frame apart. Two cameras usually work on one computer; more may need separate USB ports, and the page warns if the frame rate drops.
+
+For **linked arenas** (a bee moving between arenas through a tunnel, for example one arena per camera), draw the arena around the whole image, then draw each real arena as a zone and tick **Arena area** in the bar under the video. Results then add **Crossings** (moves from one arena area to another), **Transit s** (time between leaving one and arriving in the next) and the **first crossing**, also in the CSVs, Compare recordings and the PER Scorer export (*In transit*). Distances between bees count only bees in the same arena.
 
 ## Desktop app (.exe / .dmg)
 
-`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off.
+`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off. The app doesn't update itself: for a new version, download the new BeeTracker.exe (or .dmg) from the Releases page and replace the old one; recordings and settings stay, because they're kept in the browser.
 
 - **LEDs need Windows** with NI's NI-DAQmx driver (ni.com) and the USB-6003 plugged in before the app starts. Without them the LEDs run in simulated mode and everything else works. NI-DAQmx has no macOS driver, so on a Mac the LEDs are always simulated.
 - **First start:** the apps aren't code-signed. On Windows, choose *More info → Run anyway*. On a Mac, drag Bee Tracker to Applications, open it, then allow it under *System Settings → Privacy & Security → Open Anyway*.
@@ -43,9 +59,19 @@ A protocol is a list of **segments**. Each has a length, an optional **condition
 | Random levels | min and max (V), hold time (s), seed (the same seed gives the same levels) |
 | Formula | any formula of `t` (s into the segment) and `d` (segment length), e.g. `2.5 + 2*sin(2*pi*t)` or `3*(t < 0.5)`; `sin cos tan exp log sqrt abs floor ceil round min max mod clamp`, `pi`, `e`, `^` and comparisons work |
 
-The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). The preview shows both outputs; a segment that goes outside the helper's 0–5 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
+The LEDs tab lists the segments; **Edit protocol** widens the sidebar to edit them. The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). **Test LEDs** turns each output on at 5 V for 1 s, one after the other, whatever the protocol. The preview shows both outputs; a segment that goes outside the helper's 0–10 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
 
 Results, the **LED conditions CSV** and PER Scorer behaviors are grouped by condition: a segment's label, or what its LEDs do when it has none (e.g. `Blue 2 V`). The **LED log CSV** lists every segment each LED played, with its function. Protocols made before functions existed open as constant segments.
+
+## Wiring the LEDs
+
+The USB-6003's analog outputs are single-ended: **AO 0** and **AO 1** each give a voltage measured against the shared **AO GND**. Every circuit needs a return to AO GND; both LEDs share it.
+
+- **Don't drive LEDs straight from the pins** unless they are small indicator LEDs: each output gives only about 5 mA, and an LED's brightness isn't linear with voltage. Use an LED driver with an analog dimming input, and connect AO 0 or AO 1 to its control input and AO GND to its ground.
+- **Low-cost drivers:** a Mean Well LDD-H module (LDD-350H, LDD-700H; a few dollars) on a breadboard; a PT4115 board (about $1–3; its DIM pin takes about 0.5–2.5 V, so add a divider); or an op-amp current sink (LM358, a logic-level MOSFET and a sense resistor; current = control voltage / sense resistance). Avoid drivers that dim with low-frequency PWM: bees see flicker far faster than people do.
+- **LDD-H on a breadboard:** a 12 V supply to the red (+) and blue (−) rails; the LDD-H across the centre channel with **+Vin** to the red rail and **−Vin** to the blue rail; **DIM** to AO 0, with a 10 kΩ resistor from DIM to the blue rail so the LED stays off when the DAQ is unplugged (check what your model does with DIM left open); **+Vout** and **−Vout** to the LED's + and −; and **AO GND** to the blue rail. Check the pin order and the DIM input range in your model's datasheet. A second LED is the same circuit on AO 1.
+- **Power:** a regulated 12 V DC adapter of at least 1 A (2 A leaves room for two or three LDD-H channels), with a barrel-jack-to-breadboard adapter. The supply must exceed the LEDs' total forward voltage by a few volts.
+- **Limits:** levels can go up to 10 V. Keep every protocol level within your driver's control range (often 0–5 V), and never below 0 V. Measure light against voltage once (a light meter or photodiode) to report intensities, not volts.
 
 ## Recording setup (matters more than any setting)
 
@@ -115,3 +141,18 @@ The end-to-end tests need `pip install playwright scipy numpy`, Google Chrome, a
 - Bees on the arena wall seen from above are foreshortened. The edge band counts them as near the wall, but distance along the wall is underestimated.
 - Results and settings are kept in browser storage. Save the project file, since long multi-bee recordings may not fit in storage.
 - Links to videos on other sites only work if the site allows cross-origin reading (CORS). Otherwise, download the file and open it.
+
+## Re-recording the walkthrough
+
+The walkthrough is recorded from the real page, so re-record it after the page changes. `tools/walkthrough.py` speaks each line in `SCRIPT` with [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) (a free text-to-speech model that runs offline, the same voice as PER Scorer's walkthrough), drives the page in Chrome with a simulated camera of three bees (`tools/simcam.js`) and a simulated LED helper, and writes `walkthrough/bee-tracker-walkthrough.mp4` with the voice-over, its captions and chapters, and the tutorial's screenshots in `tutorial/img/`. Setup steps are at the top of the script; then:
+
+```
+.venv/bin/python tools/walkthrough.py --chrome
+```
+
+## Rebuilding the tutorial PDF
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+  --print-to-pdf=Bee-Tracker-Student-Tutorial.pdf "file://$PWD/tutorial/bee-tracker-tutorial.html"
+```

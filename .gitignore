@@ -5,3 +5,6 @@ tests/*.png
 .DS_Store
 build/
 dist/
+.models/
+.venv/
+!walkthrough/*.mp4

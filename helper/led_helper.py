@@ -11,13 +11,13 @@ Setup on the lab computer (once):
     1. NI-DAQmx driver from ni.com (the DAQ must show up in NI MAX, e.g. as Dev1)
     2. py -m pip install nidaqmx numpy
 Run, and keep the window open while you use the page:
-    py helper\\led_helper.py                     (Dev1, at most 5 V)
+    py helper\\led_helper.py                     (Dev1, at most 10 V)
     py helper\\led_helper.py --device Dev2 --max-volts 4
     py helper\\led_helper.py --simulated         (no DAQ: try the page without hardware)
 It prints the address and a 6-digit code to type into the page.
 
 Safety:
-  * Levels above --max-volts (default 5 V) or below 0 V are refused (a single LED can be
+  * Levels above --max-volts (default 10 V, the USB-6003's range) or below 0 V are refused (a single LED can be
     damaged by a negative voltage); --allow-negative lifts the 0 V floor.
   * Every protocol ends at 0 V. Stop, errors, Ctrl+C and quitting set both outputs to 0 V.
     If the program is killed mid-protocol (e.g. the window is closed with its X on
@@ -618,7 +618,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Drive two LEDs on an NI USB-6003 (ao0, ao1) for the Bee Tracker page.")
     ap.add_argument("--device", default="Dev1", help="NI device name, as in NI MAX (default Dev1)")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--max-volts", type=float, default=5.0, help="highest level allowed on either output (default 5 V)")
+    ap.add_argument("--max-volts", type=float, default=10.0, help="highest level allowed on either output (default 10 V)")
     ap.add_argument("--allow-negative", action="store_true", help="allow levels down to -max-volts (default: 0 V floor)")
     ap.add_argument("--code", help="a fixed 6-digit code instead of a new one each time")
     ap.add_argument("--simulated", action="store_true", help="no DAQ: keep time only, for trying the page")

@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT / "helper"))
 import led_helper as L  # noqa: E402
 
 PORTS = range(8765, 8775)
-MAX_VOLTS = 5.0
+MAX_VOLTS = 10.0                    # the USB-6003's full range
 
 
 def ni_dlls() -> list[str]:

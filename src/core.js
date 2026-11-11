@@ -191,6 +191,38 @@ function estimateBeeArea(blobs){
   return a[Math.floor((a.length - 1) / 2)];
 }
 
+// Detection settings worked out from one frame and its background (processing image, inside the arena mask):
+// the camera noise, which way the bees differ from the background, the threshold that finds the n bees with the most
+// margin, and the size of one bee. fixed: any of {polarity, thr, open} the user set, which are kept as they are.
+function autoDetect(img, bg, mask, bgMed, w, h, n, fixed){
+  fixed = fixed || {};
+  const off = bgMed == null ? 0 : bgMed - maskedMedian(img, mask);
+  const d = new Int16Array(img.length), hist = new Uint32Array(256); let cnt = 0;
+  for(let i = 0; i < img.length; i++) if(mask[i]){ const v = img[i] + off - bg[i]; d[i] = v; hist[Math.min(255, Math.abs(v))]++; cnt++; }
+  if(!cnt) return {error: 'The arena has no pixels on the video.'};
+  let c = 0, mad = 0; for(let v = 0; v < 256; v++){ c += hist[v]; if(c >= cnt / 2){ mad = v; break; } }
+  const noise = 1.4826 * Math.max(1, mad), base = Math.max(8, Math.min(100, Math.round(5 * noise)));
+  let dark = 0, light = 0;
+  for(let i = 0; i < d.length; i++) if(mask[i]){ if(d[i] <= -base) dark++; else if(d[i] >= base) light++; }
+  const polarity = fixed.polarity || (dark > 3 * light ? 'dark' : light > 3 * dark ? 'light' : 'both');
+  const blobsAt = (thr, open) => {
+    const fg = new Uint8Array(d.length);
+    for(let i = 0; i < d.length; i++) if(mask[i]){ const v = polarity === 'dark' ? -d[i] : polarity === 'light' ? d[i] : Math.abs(d[i]); if(v >= thr) fg[i] = 1; }
+    return findBlobs(open ? open3(fg, w, h) : fg, w, h, 4).blobs;
+  };
+  const ts = [];
+  if(fixed.thr) ts.push(fixed.thr); else for(let t = base; t <= 120; t = Math.max(t + 1, Math.round(t * 1.12))) ts.push(t);
+  const scan = open => ts.map(t => ({t, blobs: blobsAt(t, open)}));
+  let open = fixed.open ?? true, runs = scan(open);
+  if(fixed.open == null && runs.every(x => !x.blobs.length)){ open = false; runs = scan(open); }     // bees too small to survive the opening
+  // the middle of the first run of thresholds that find exactly n blobs, else the closest count (lowest threshold)
+  const first = runs.findIndex(x => x.blobs.length === n);
+  let best;
+  if(first >= 0){ let last = first; while(last + 1 < runs.length && runs[last + 1].blobs.length === n) last++; best = runs[(first + last) >> 1]; }
+  else best = runs.reduce((a, x) => Math.abs(x.blobs.length - n) < Math.abs(a.blobs.length - n) ? x : a);
+  return {polarity, thr: best.t, open, beeArea: estimateBeeArea(best.blobs), found: best.blobs.length, noise: +noise.toFixed(1), blobs: best.blobs};
+}
+
 /* ---------- assignment ---------- */
 // Hungarian algorithm (min-cost). cost: n x m with n <= m. Returns column for each row.
 function hungarian(cost){
@@ -357,6 +389,62 @@ function nearestNeighbour(tracks, scale){
     if(best < Infinity){ sum[a] += best; cnt[a]++; }
   }
   return sum.map((s, a) => cnt[a] ? s / cnt[a] : null);
+}
+/* ---------- distances over time and social contact ---------- */
+// Distance from a point (video px) to a zone, in scale units: to its edge (0 inside) or to its centre.
+// Ellipse edges use the radial projection, which is exact for circles.
+function zoneDistance(s, x, y, toEdge, scale){
+  const ux = scale ? scale.sx : 1, uy = scale ? scale.sy : 1;
+  const dx = (x - s.x - s.w / 2) * ux, dy = (y - s.y - s.h / 2) * uy;
+  if(!toEdge) return Math.hypot(dx, dy);
+  const hw = s.w / 2 * ux, hh = s.h / 2 * uy;
+  if(s.type === 'rect') return Math.hypot(Math.max(0, Math.abs(dx) - hw), Math.max(0, Math.abs(dy) - hh));
+  const r = Math.hypot(dx / hw, dy / hh);
+  return r <= 1 ? 0 : Math.hypot(dx, dy) * (1 - 1 / r);
+}
+// Centre-to-centre distance of every pair of bees per sample (null where either is missing). xs[k][i], ys[k][i] in video px.
+function pairDistances(xs, ys, scale){
+  const ux = scale ? scale.sx : 1, uy = scale ? scale.sy : 1, out = [];
+  for(let a = 0; a < xs.length; a++) for(let b = a + 1; b < xs.length; b++)
+    out.push({a, b, d: xs[a].map((x, i) => x == null || xs[b][i] == null ? null : Math.hypot((x - xs[b][i]) * ux, (ys[a][i] - ys[b][i]) * uy))});
+  return out;
+}
+// Social contact: how long each bee is within thr of any other bee, and each pair's time close, encounters (runs of
+// being close, merged and filtered like other bouts) and first contact. Steps longer than maxGap are not counted.
+function social(t, pairs, n, thr, maxGap, minBout, mergeGap){
+  const mk = () => ({close: 0, measured: 0, steps: []});
+  const bees = Array.from({length: n}, mk), prs = pairs.map(p => Object.assign(mk(), {a: p.a, b: p.b, first: null}));
+  for(let i = 0; i < t.length - 1; i++){
+    const dt = t[i + 1] - t[i]; if(!(dt > 0) || dt > maxGap) continue;
+    const near = new Array(n).fill(null);
+    pairs.forEach((p, j) => {
+      const d = p.d[i]; if(d == null) return;
+      const on = d < thr, q = prs[j];
+      q.measured += dt; q.steps.push({t0: t[i], t1: t[i + 1], on});
+      if(on){ q.close += dt; if(q.first == null) q.first = t[i]; }
+      near[p.a] = near[p.a] || on; near[p.b] = near[p.b] || on;
+    });
+    near.forEach((on, k) => { if(on == null) return; const B = bees[k]; B.measured += dt; if(on) B.close += dt; B.steps.push({t0: t[i], t1: t[i + 1], on}); });
+  }
+  const fin = o => {
+    o.runs = runsFrom(o.steps, minBout, mergeGap); delete o.steps;
+    o.frac = o.measured > 0 ? o.close / o.measured : null; o.encounters = o.runs.length;
+    o.meanEncounter = o.runs.length ? o.runs.reduce((a, r) => a + r[1] - r[0], 0) / o.runs.length : null;
+    return o;
+  };
+  return {bees: bees.map(fin), pairs: prs.map(fin)};
+}
+// Moves between arena areas (zones marked as arenas, e.g. two linked arenas). area[i]: the index of the area the bee
+// is in at sample i, -1 in none, null if not seen. Each change of area is a crossing; the time from last being seen in
+// one area to first being seen in the next is time in transit (in a tunnel neither camera sees, say).
+function crossings(t, area){
+  const out = []; let last = null, lastT = null;
+  for(let i = 0; i < t.length; i++){
+    const a = area[i]; if(a == null || a < 0) continue;
+    if(last != null && a !== last) out.push({from: last, to: a, t0: lastT, t1: t[i]});
+    last = a; lastT = t[i];
+  }
+  return {list: out, n: out.length, transit: out.reduce((x, c) => x + c.t1 - c.t0, 0), first: out.length ? out[0] : null};
 }
 /* ---------- LEDs (stimuli logged by Argus) ---------- */
 const fmtLevel = v => (Math.round(v * 100) / 100) + ' V';
@@ -625,7 +713,8 @@ function ledPlayed(seq, starts, t0, tEnd, rate, names){
 function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && !prev) n++; prev = !!f; }); return n; }
 
 return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
-  findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
+  findBlobs, splitBlob, detect, estimateBeeArea, autoDetect, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
+  zoneDistance, pairDistances, social, crossings,
   lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel,
   LED_FNS, ledFn, parseFormula, hash01, ledFnProblems, ledEval, ledSamples, ledRange, ledDescribe, ledIsOff, ledConditionName, ledSequence, ledPlayed};
 })();
