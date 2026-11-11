@@ -34,6 +34,11 @@ h1{font-family:var(--serif);font-size:clamp(30px,5vw,42px);line-height:1.1;margi
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 24px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:18px}
 .facts b{color:var(--ink);font-weight:600}
 .facts a{color:var(--accent)}
+.help{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.help h2{margin:0;font-size:17px}
+.help ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:4px 18px;font-size:15px}
+.help a{color:var(--accent);text-decoration:none;font-weight:500}
+.help a:hover{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.door{transition:none}}
 </style>
 </head>
@@ -66,6 +71,20 @@ h1{font-family:var(--serif);font-size:clamp(30px,5vw,42px);line-height:1.1;margi
       <span class="go">Start tracking →</span>
     </a>
   </div>
+  <nav class="help" aria-label="Help">
+    <h2>Help</h2>
+    <ul>
+      <li><a href="help.html#install">Install the desktop app</a></li>
+      <li><a href="help.html#update">Update to a new version</a></li>
+      <li><a href="help.html#quick">Quick start</a></li>
+      <li><a href="help.html#cameras">Several cameras</a></li>
+      <li><a href="help.html#linked">Linked arenas</a></li>
+      <li><a href="help.html#wiring">Wiring the LEDs</a></li>
+      <li><a href="help.html#trouble">Troubleshooting</a></li>
+      <li><a href="tutorial/bee-tracker-tutorial.html">Read the tutorial online</a></li>
+      <li><a href="help.html">All help topics →</a></li>
+    </ul>
+  </nav>
   <div class="facts">
     <div><b>Works in</b> Chrome and Edge on a laptop or desktop.</div>
     <div><b>Videos</b> MP4 (H.264) plays everywhere. Cameras need Chrome or Edge.</div>

@@ -8,7 +8,8 @@ Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It run
 
 | Page | What it is |
 |---|---|
-| [`index.html`](index.html) | Start page linking the guides and the tracker |
+| [`index.html`](index.html) | Start page linking the guides, help and the tracker, at https://varsh7777.github.io/bee-tracker/ |
+| [`help.html`](help.html) | Help topics: installing and updating the app, quick start, several cameras, linked arenas, LEDs and wiring, results, shortcuts, troubleshooting |
 | [`bee-walkthrough.html`](bee-walkthrough.html) | A narrated 3-minute video of one live trial, with captions and chapters |
 | [`Bee-Tracker-Student-Tutorial.pdf`](Bee-Tracker-Student-Tutorial.pdf) | Student tutorial: setup, step-by-step trials, detection, LEDs, results, practice questions and a reference card. Source in `tutorial/`. |
 

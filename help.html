@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bee Tracker Help</title>
+<meta name="description" content="Bee Tracker help: installing the desktop app, a quick start, several cameras and linked arenas, LED protocols and wiring, results and exports, and troubleshooting.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+<style>
+/* Same look as index.html: one readable column, a contents list, and short sections with tables. */
+:root{
+  --bg:#f3f5f6; --panel:#fff; --ink:#18212a; --muted:#5d6b78; --line:#d9e0e5; --soft:#eef2f4; --accent:#b06e00; --accent-ink:#fff; --accent-soft:#fbefd9; --bad:#b3362c; --bad-soft:#f8e1de;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"IBM Plex Serif",Georgia,serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12171c; --panel:#1a2128; --ink:#e4e9ed; --muted:#93a1ad; --line:#2c3640; --soft:#222b33; --accent:#f0a92e; --accent-ink:#1a1206; --accent-soft:#3a2c12; --bad:#ff8a7e; --bad-soft:#3d1d1a; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);
+  padding:max(32px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 64px max(16px,env(safe-area-inset-left))}
+main{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top a.back{margin-left:auto;color:var(--accent);font-weight:600;text-decoration:none;font-size:15px}
+h1{font-family:var(--serif);font-size:clamp(28px,4.5vw,38px);line-height:1.1;margin:0;letter-spacing:-.01em}
+h2{font-family:var(--serif);font-size:24px;margin:0 0 8px;scroll-margin-top:16px}
+h3{font-size:17px;margin:18px 0 4px}
+p{margin:0 0 10px} ul,ol{margin:0 0 10px;padding-left:22px} li{margin-bottom:4px}
+a{color:var(--accent)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;min-width:0}
+.lede{margin:6px 0 0;color:var(--muted);font-size:17px;max-width:62ch}
+.toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 18px;margin:0;padding:0;list-style:none}
+.toc a{text-decoration:none;font-weight:500}
+.guides{display:flex;flex-wrap:wrap;gap:8px}
+.guides a{border:1px solid var(--accent);background:var(--accent-soft);border-radius:8px;padding:6px 12px;text-decoration:none;font-weight:600;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:4px 0 12px}
+th,td{text-align:left;vertical-align:top;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--soft)}
+code,kbd{font-family:var(--mono);font-size:14px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.warn{border-left:3px solid var(--bad);background:var(--bad-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
+.tip{border-left:3px solid var(--accent);background:var(--accent-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
+.wrap-table{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div class="top">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="#b06e00"/><path d="M7 25c4-1 5-6 9-7s6 3 11-3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.2"/><circle cx="25" cy="12" r="3.4" fill="#fff"/></svg>
+      <h1>Bee Tracker help</h1>
+      <a class="back" href="index.html">← All guides</a>
+    </div>
+    <p class="lede">Answers for setting up and running Bee Tracker. For every step in order, read the student tutorial; to see it done, watch the walkthrough.</p>
+  </div>
+
+  <div class="guides">
+    <a href="bee-tracker.html">Open Bee Tracker</a>
+    <a href="bee-walkthrough.html">Walkthrough video</a>
+    <a href="Bee-Tracker-Student-Tutorial.pdf">Tutorial (PDF)</a>
+    <a href="tutorial/bee-tracker-tutorial.html">Tutorial (web)</a>
+    <a href="https://github.com/varsh7777/bee-tracker/releases/latest">Download the app</a>
+  </div>
+
+  <section aria-labelledby="contents">
+    <h2 id="contents">Contents</h2>
+    <ul class="toc">
+      <li><a href="#install">Install the desktop app</a></li>
+      <li><a href="#update">Update to a new version</a></li>
+      <li><a href="#quick">Quick start</a></li>
+      <li><a href="#cameras">Several cameras</a></li>
+      <li><a href="#linked">Linked arenas</a></li>
+      <li><a href="#detect">Detection</a></li>
+      <li><a href="#leds">LED protocols</a></li>
+      <li><a href="#wiring">Wiring the LEDs</a></li>
+      <li><a href="#results">Results and exports</a></li>
+      <li><a href="#keys">Keyboard shortcuts</a></li>
+      <li><a href="#trouble">Troubleshooting</a></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="install">
+    <h2 id="install">Install the desktop app</h2>
+    <p>The desktop app holds the page and the LED helper in one program. On the lab computer it's the easiest way to run Bee Tracker; for tracking saved videos only, <a href="bee-tracker.html">the web page</a> is enough.</p>
+    <ol>
+      <li>Download <b>BeeTracker.exe</b> (Windows) or <b>BeeTracker.dmg</b> (Mac) from the <a href="https://github.com/varsh7777/bee-tracker/releases/latest">latest release</a>.</li>
+      <li><b>For LEDs (Windows only):</b> install NI's <b>NI-DAQmx</b> driver from ni.com, restart, and plug in the USB-6003 before starting the app.</li>
+      <li><b>First start:</b> the app isn't code-signed. On Windows choose <i>More info → Run anyway</i>. On a Mac, drag it to Applications, open it, then allow it under <i>System Settings → Privacy &amp; Security → Open Anyway</i>.</li>
+      <li>The page opens in Chrome or Edge, already connected to the LEDs. A small Bee Tracker window shows the DAQ, with <b>Open Bee Tracker</b>, <b>LEDs off</b> and <b>Quit</b>. Keep it open while you work; quitting turns both LEDs off.</li>
+    </ol>
+    <p>If the small window says the LEDs are simulated, it says why, with a <b>Copy this message</b> button. See <a href="#trouble">Troubleshooting</a>.</p>
+  </section>
+
+  <section aria-labelledby="update">
+    <h2 id="update">Update to a new version</h2>
+    <p>The app doesn't update itself. To update: save a project file (Data tab), quit Bee Tracker, end any leftover <i>BeeTracker</i> processes in Task Manager, then replace the old <b>BeeTracker.exe</b> with the one from the <a href="https://github.com/varsh7777/bee-tracker/releases/latest">latest release</a>. Your recordings and settings stay: they are kept in the browser, not in the app.</p>
+    <p>The web page at this address is always the newest version.</p>
+  </section>
+
+  <section aria-labelledby="quick">
+    <h2 id="quick">Quick start</h2>
+    <ol>
+      <li>Fill in your initials and the experiment at the top. Choose <b>Live camera</b> and press <b>Start camera</b> (or <b>Saved video</b> and open a file).</li>
+      <li><b>Setup</b> tab: press <b>Draw arena</b> and drag around the arena floor. Enter its real width in mm and the number of bees.</li>
+      <li>Optional: <b>Add zone</b>, and an edge band in mm.</li>
+      <li><b>Detect</b> tab: with the bees in, press <b>Set up detection</b>. Wait for <i>Found all … bees. Ready to track.</i></li>
+      <li>Optional: <b>LEDs</b> tab: connect, check the protocol, press <b>Test LEDs (5 V)</b>.</li>
+      <li>Under the video, set the <b>Length</b> and press <b>Start trial</b> (saved video: <b>Track bees</b>). Keep the tab in front.</li>
+      <li>Read the results; <b>Data</b> tab: save the CSVs and the project file.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="cameras">
+    <h2 id="cameras">Several cameras</h2>
+    <p>Under Live camera, set <b>Cameras</b> to 2, 3 or 4, choose a layout (side by side, stacked or 2 × 2) and a camera for each tile, then press <b>Start camera</b>. The cameras are joined into one image, and everything else works on it as if it were one camera, including the saved trial video.</p>
+    <ul>
+      <li>Set each tile's <b>zoom</b> so 1 mm spans the same number of pixels in every tile; otherwise distances across tiles are off.</li>
+      <li>Tiles are at most one frame apart (33 ms at 30 fps).</li>
+      <li>Two USB cameras usually work on one computer. With more, use separate USB ports; the page warns if the frame rate drops.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="linked">
+    <h2 id="linked">Linked arenas</h2>
+    <p>For a bee that moves between arenas, for example through a tunnel between two arenas filmed by two cameras:</p>
+    <ol>
+      <li>Draw the arena around the whole image.</li>
+      <li>Draw each real arena as a zone, click its outline, and tick <b>Arena area</b> in the bar under the video.</li>
+    </ol>
+    <p>The results add <b>Crossings</b>, <b>Transit s</b> (time between leaving one arena and arriving in the next) and the <b>first crossing</b>. They are also in the CSVs, Compare recordings and the PER Scorer export (<i>In transit</i>). Distances between bees count only bees in the same arena.</p>
+  </section>
+
+  <section aria-labelledby="detect">
+    <h2 id="detect">Detection</h2>
+    <p><b>Set up detection</b> gets a picture of the arena without bees (the background), then chooses whether bees are darker or lighter, a threshold above the camera's noise, the size of one bee, and a processing size. Every value is under <b>Advanced</b>, tagged <i>auto</i>; change one and it is tagged <i>set by you</i> and kept. <b>Reset all to auto</b> undoes that.</p>
+    <div class="tip"><b>Best background:</b> before the bees go in, use <i>Capture empty arena</i> (Advanced), and choose it for <i>Set up detection gets the background by</i>.</div>
+  </section>
+
+  <section aria-labelledby="leds">
+    <h2 id="leds">LED protocols</h2>
+    <p>With the live camera, each trial can play a light protocol on the USB-6003's two outputs (AO 0, AO 1). A protocol is a list of segments; each sets what both LEDs do: off, a constant level, a ramp, an exponential, a sine, a pulse train, a single pulse, random levels, or a formula of time. Protocols can repeat and shuffle.</p>
+    <ul>
+      <li><b>Test LEDs (5 V)</b> turns each output on at 5 V for 1 s, to check the wiring.</li>
+      <li>Tick <b>LEDs</b> in the trial bar to play the protocol with a trial; it plays on the DAQ's own clock.</li>
+      <li>Results and charts are also split by LED condition (the segment labels).</li>
+    </ul>
+    <div class="warn"><b>Levels can go up to 10 V.</b> Keep every level within what your LED driver and LED can take.</div>
+  </section>
+
+  <section aria-labelledby="wiring">
+    <h2 id="wiring">Wiring the LEDs</h2>
+    <p>Each output gives a voltage against the shared <b>AO GND</b>, so every circuit returns to AO GND. The outputs give only about 5 mA: drive each LED through a driver whose current follows the voltage. The cheapest is an <b>op-amp current sink</b> on a breadboard: an LM358, a logic-level MOSFET (IRLZ44N) and a 1 Ω resistor. LED current = control voltage / 1 Ω, so brightness follows the protocol exactly, without flicker.</p>
+    <div class="wrap-table"><table>
+      <tr><th>From</th><th>To</th></tr>
+      <tr><td>5 V supply + / −</td><td>Breadboard red (+) and blue (−) rails</td></tr>
+      <tr><td>DAQ AO GND</td><td>Blue rail (shared ground)</td></tr>
+      <tr><td>DAQ AO 0</td><td>15 kΩ to LM358 pin 3 (+ input); 1 kΩ from pin 3 to the blue rail</td></tr>
+      <tr><td>LM358 pin 1 (output)</td><td>100 Ω to the MOSFET gate</td></tr>
+      <tr><td>MOSFET source</td><td>LM358 pin 2 (− input), and 1 Ω to the blue rail</td></tr>
+      <tr><td>MOSFET drain</td><td>LED − (cathode); LED + to the red rail</td></tr>
+      <tr><td>LM358 pins 8 / 4</td><td>Red rail / blue rail, with 0.1 µF between them</td></tr>
+      <tr><td>Second LED</td><td>Same circuit on AO 1, using pins 5, 6 and 7</td></tr>
+    </table></div>
+    <p>With these values 5 V gives 312 mA (10 V would give 625 mA). Use a 5 V supply, not 12 V: the MOSFET turns any extra voltage into heat. A Mean Well LDD-H is on/off only (its DIM input switches and dims by PWM, which bees can see as flicker); use it only for fixed-brightness on/off protocols.</p>
+  </section>
+
+  <section aria-labelledby="results">
+    <h2 id="results">Results and exports</h2>
+    <div class="wrap-table"><table>
+      <tr><th>Measure</th><th>Meaning</th></tr>
+      <tr><td>Found</td><td>Share of samples the bee was detected in (below 80% is flagged)</td></tr>
+      <tr><td>Distance, speed, moving</td><td>From the smoothed track; moving = faster than 3 mm/s</td></tr>
+      <tr><td>Zones, edge</td><td>Share of time in each zone (visits in brackets), and near the wall</td></tr>
+      <tr><td>Nearest, near bee, encounters</td><td>Two or more bees: distance to the nearest bee, share of time within 10 mm of another, separate contacts</td></tr>
+      <tr><td>Crossings, transit</td><td>Linked arenas: moves between arenas and time between them</td></tr>
+    </table></div>
+    <p>Beside the track map, charts show each bee's distance from a zone and the distance between bees over time; point at a chart to see where each bee was. With unmarked bees that touched, use the <b>All bees</b> row: identities can swap.</p>
+    <p><b>Data</b> tab: Tracks CSV (every sample), Summary CSV (one row per bee), Export to PER Scorer, LED CSVs, and <b>Save project (.json)</b>. Save the project at the end of every session.</p>
+  </section>
+
+  <section aria-labelledby="keys">
+    <h2 id="keys">Keyboard shortcuts</h2>
+    <div class="wrap-table"><table>
+      <tr><td><kbd>Space</kbd></td><td>Play / pause a saved video</td></tr>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Seek 1 s (<kbd>Shift</kbd>: 5 s); with a shape selected, move it 1 px (<kbd>Shift</kbd>: 10 px)</td></tr>
+      <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>One frame back / forward</td></tr>
+      <tr><td><kbd>Delete</kbd></td><td>Remove the selected shape</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Stop drawing, or deselect</td></tr>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="trouble">
+    <h2 id="trouble">Troubleshooting</h2>
+    <div class="wrap-table"><table>
+      <tr><th>Problem</th><th>What to do</th></tr>
+      <tr><td>LEDs say <i>simulated</i></td><td>The app says why. <i>Isn't installed</i>: install NI-DAQmx and restart. <i>No NI device</i>: plug in the DAQ, then restart the app. On a Mac the LEDs are always simulated.</td></tr>
+      <tr><td><i>Can't reach the LED helper</i></td><td>The web page can't start it. Use the desktop app, or run <code>py helper\led_helper.py</code> and type its code.</td></tr>
+      <tr><td>Camera won't start</td><td>Allow the camera in the address bar; close other programs using it; with several cameras, try other USB ports or a smaller size.</td></tr>
+      <tr><td>Set up detection finds too many or too few bees</td><td>Turn on <i>Show detection</i>. Shadows or reflections: fix the light or raise the threshold (Advanced). Too few: bees touching, or a still bee became background: use <i>Capture empty arena</i>.</td></tr>
+      <tr><td>Tracking didn't keep up</td><td>Lower the processing size or samples per second (Detect → Advanced), or a smaller camera size.</td></tr>
+      <tr><td>Distances in px</td><td>Enter the arena's width in mm on the Setup tab.</td></tr>
+      <tr><td>Recordings disappeared</td><td>Browser storage was cleared, or you opened the other copy (app vs web page each keep their own). Use <i>Open project…</i> with your saved file.</td></tr>
+    </table></div>
+    <p>Still stuck? Report it on <a href="https://github.com/varsh7777/bee-tracker/issues">GitHub Issues</a>, with the app's message copied in.</p>
+  </section>
+</main>
+</body>
+</html>
