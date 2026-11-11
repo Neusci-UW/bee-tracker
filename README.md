@@ -6,16 +6,18 @@ Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It run
 
 ## Use
 
-1. Open `bee-tracker.html` in Chrome or Edge, then open a video (MP4/H.264 is safest).
-2. Press **Draw arena** and drag a box around the arena floor (round or rectangular). Enter the arena's real **width in mm** to set the scale.
-3. Set **Bees in arena**.
-4. Pause on a frame where every bee is visible and apart. Press **Test on this frame**: detected pixels show in magenta, with a cross on each bee. Move the **threshold** until each bee is one solid blob and nothing else lights up.
-5. Press **Measure bee size**. This is needed to split bees that touch.
-6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To remove the arena, a zone or the light check, click its outline on the video, then **Remove** (or press Delete).
-7. Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
-8. Export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
+1. Open `bee-tracker.html` in Chrome or Edge, choose **Saved video**, then open a video (MP4/H.264 is safest).
+2. **Setup** tab: press **Draw arena** and drag a box around the arena floor (round or rectangular). Enter the arena's real **width in mm** to set the scale, and set **Bees in arena**.
+3. **Detect** tab: pause on a frame where every bee is visible and apart, and press **Set up detection**. It builds the background, then works out which way the bees differ from it, a threshold well above the camera noise, the size of one bee (needed to split bees that touch) and a processing size, and says whether it found every bee. Detected pixels show in magenta, with a cross on each bee. If it gets something wrong (shadows, reflections), change that value under **Advanced**: it's then marked *set by you* and kept the next time; **Reset all to auto** undoes that.
+4. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To edit the arena, a zone or the light check, click its outline on the video: drag it to move it, drag a handle to resize it (Shift keeps a circle round), nudge it with the arrow keys, or set a zone's name, shape, centre and size in the bar under the video. **Duplicate** copies a zone; **Remove** (or Delete) removes the shape.
+5. Under the video, **Start here** and **End here** set the part to track (shown on the seek bar). Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
+6. **Data** tab: export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
 
-Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**.
+With **Live camera**, press **Set up detection** with the bees in the arena (it learns the background while they move, or captures the empty arena if you choose that under Advanced), then use the bar under the video: trial **Length**, **Save video**, **LEDs**, and **Start trial**. The bar shows what's still missing (camera, arena, detection, LEDs), and the video shows the trial's time and progress while it runs. Samples per second, the maximum walking speed and how frames are read are under **Detect → Advanced**.
+
+Beside the track map, two charts show the trial over time: each bee's **distance from a zone** (pick the zone, and measure to its edge, 0 inside, or its centre) and the **distance between bees** (every pair, or with many bees the median and range of each bee's nearest neighbour). LED conditions show as shaded bands. Point at a chart to see where each bee was at that moment on the map; with a saved video, click to jump the video there. With two or more bees, **Near bee** is the share of tracked time each bee spent within a set distance of another bee (*Close to another bee within*, under Results → Settings, default 10 mm centre to centre, about one bee length), with the number of **encounters** and their mean length, plus a **By pair** table (time close, encounters, first contact). These are in the Summary CSV, Compare recordings and the PER Scorer export (*Near another bee*); the Tracks CSV gains each bee's distance to every zone and to every other bee.
+
+Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**, the second tab of the results. The **?** in the header lists the keyboard shortcuts.
 
 ## Desktop app (.exe / .dmg)
 
@@ -43,7 +45,7 @@ A protocol is a list of **segments**. Each has a length, an optional **condition
 | Random levels | min and max (V), hold time (s), seed (the same seed gives the same levels) |
 | Formula | any formula of `t` (s into the segment) and `d` (segment length), e.g. `2.5 + 2*sin(2*pi*t)` or `3*(t < 0.5)`; `sin cos tan exp log sqrt abs floor ceil round min max mod clamp`, `pi`, `e`, `^` and comparisons work |
 
-The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). The preview shows both outputs; a segment that goes outside the helper's 0–5 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
+The LEDs tab lists the segments; **Edit protocol** widens the sidebar to edit them. The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). **Test LEDs** turns each output on at 5 V for 1 s, one after the other, whatever the protocol. The preview shows both outputs; a segment that goes outside the helper's 0–10 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
 
 Results, the **LED conditions CSV** and PER Scorer behaviors are grouped by condition: a segment's label, or what its LEDs do when it has none (e.g. `Blue 2 V`). The **LED log CSV** lists every segment each LED played, with its function. Protocols made before functions existed open as constant segments.
 

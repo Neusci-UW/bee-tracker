@@ -211,3 +211,47 @@ test('ledPlayed logs conditions, events and onsets on the trial clock', () => {
   assert.deepEqual(p.onsets, [1.5, 1.75, 2, 2.25, 2.5, 2.501]);             // 4 pulses, Blue on again, Green leaves 0 V one sample in
   assert.equal(C.conditionAt(p.conditions, 1.6), 'Flicker');
 });
+
+test('autoDetect finds which way bees differ, a threshold above the noise, and the bee size', () => {
+  const w = 80, h = 60, n = w * h, mask = new Uint8Array(n).fill(1), bg = new Uint8Array(n).fill(120);
+  let seed = 1; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const frame = (bees, level) => {
+    const img = new Uint8Array(n);
+    for(let i = 0; i < n; i++) img[i] = 120 + Math.round((rnd() - 0.5) * 8);
+    bees.forEach(([x, y]) => { for(let j = 0; j < 7; j++) for(let i = 0; i < 7; i++) img[(y + j) * w + x + i] = level; });
+    return img;
+  };
+  const dark = C.autoDetect(frame([[10, 10], [50, 30]], 40), bg, mask, 120, w, h, 2);
+  assert.equal(dark.polarity, 'dark'); assert.equal(dark.found, 2);
+  assert.ok(dark.thr >= 8 && dark.thr < 80, 'threshold ' + dark.thr);
+  assert.ok(Math.abs(dark.beeArea - 49) <= 8, 'bee area ' + dark.beeArea);
+  const light = C.autoDetect(frame([[30, 20]], 230), bg, mask, 120, w, h, 1);
+  assert.equal(light.polarity, 'light'); assert.equal(light.found, 1);
+  const kept = C.autoDetect(frame([[30, 20]], 40), bg, mask, 120, w, h, 1, {polarity: 'both', thr: 25});
+  assert.equal(kept.polarity, 'both'); assert.equal(kept.thr, 25); assert.equal(kept.found, 1);
+  assert.equal(C.autoDetect(frame([], 40), bg, mask, 120, w, h, 1).found, 0);
+});
+
+test('zoneDistance: to the edge (0 inside) or the centre, in mm', () => {
+  const circle = {type: 'ellipse', x: 0, y: 0, w: 20, h: 20}, box = {type: 'rect', x: 0, y: 0, w: 10, h: 10}, sc = {sx: 0.5, sy: 0.5};
+  assert.equal(C.zoneDistance(circle, 10, 10, true), 0);
+  assert.ok(Math.abs(C.zoneDistance(circle, 40, 10, true) - 20) < 1e-9);
+  assert.ok(Math.abs(C.zoneDistance(circle, 40, 10, false, sc) - 15) < 1e-9);
+  assert.equal(C.zoneDistance(box, 13, 14, true), 5);
+  assert.equal(C.zoneDistance(box, 5, 5, true), 0);
+});
+
+test('social: time near another bee, encounters and first contact per pair', () => {
+  const t = Array.from({length: 11}, (_, i) => i * 0.5);            // 0 … 5 s
+  const xs = [t.map(() => 0), t.map((_, i) => i < 4 ? 5 : 50), t.map((_, i) => i === 7 ? null : 100)];
+  const ys = xs.map(a => a.map(() => 0));
+  const pairs = C.pairDistances(xs, ys, null);
+  assert.deepEqual(pairs.map(p => [p.a, p.b]), [[0, 1], [0, 2], [1, 2]]);
+  assert.equal(pairs[1].d[7], null);
+  const s = C.social(t, pairs, 3, 10, 1, 0, 0);
+  assert.equal(s.pairs[0].close, 2); assert.equal(s.pairs[0].encounters, 1); assert.equal(s.pairs[0].first, 0);
+  assert.equal(s.pairs[0].frac, 2 / 5);
+  assert.equal(s.bees[0].close, 2); assert.equal(s.bees[2].close, 0); assert.equal(s.bees[2].frac, 0);
+  assert.equal(s.pairs[2].encounters, 0); assert.equal(s.pairs[2].first, null);
+  assert.equal(C.social(t, pairs, 3, 10, 1, 3, 0).bees[0].encounters, 0);     // shorter than the shortest bout kept
+});

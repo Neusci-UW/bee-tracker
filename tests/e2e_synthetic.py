@@ -59,6 +59,7 @@ def run(page, video, n, method, t_apart):
     page.mouse.move(box[2], box[3], steps=4); page.mouse.up()
     page.fill("#a-w", "90"); page.press("#a-w", "Enter")
     page.fill("#r-n", str(n)); page.press("#r-n", "Enter")
+    page.click(".sidetabs [data-tab=detect]"); page.click("#dtAdv")          # these controls are under Detect → Advanced
     page.select_option("#t-method", method)
     page.evaluate(f"document.getElementById('vid').currentTime = {t_apart}")
     page.wait_for_timeout(500)

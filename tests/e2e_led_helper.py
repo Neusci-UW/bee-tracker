@@ -87,6 +87,7 @@ def main():
             page.click("#bArena"); page.mouse.move(*a); page.mouse.down(); page.mouse.move(*b, steps=5); page.mouse.up()
             page.fill("#a-w", "90"); page.press("#a-w", "Enter")
             page.fill("#r-n", "3"); page.press("#r-n", "Enter")
+            page.click(".sidetabs [data-tab=detect]"); page.click("#dtAdv")   # these controls are under Detect → Advanced
             page.click("#bBgLearn"); page.wait_for_timeout(500); page.wait_for_function("!window.__beeTracker.busy", timeout=60000)
             for _ in range(40):
                 page.click("#bMeasure"); page.wait_for_timeout(250); page.wait_for_function("!window.__beeTracker.busy")
