@@ -11,11 +11,41 @@ Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It run
 3. Set **Bees in arena**.
 4. Pause on a frame where every bee is visible and apart. Press **Test on this frame**: detected pixels show in magenta, with a cross on each bee. Move the **threshold** until each bee is one solid blob and nothing else lights up.
 5. Press **Measure bee size**. This is needed to split bees that touch.
-6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking.
+6. Optional: add zones (**Add zone**) and an **edge band** in mm (time near the wall, i.e. thigmotaxis). Zones can be changed after tracking, and the results update without re-tracking. To remove the arena, a zone or the light check, click its outline on the video, then **Remove** (or press Delete).
 7. Press **Track bees**. Keep the tab visible while it runs, because browsers pause video in hidden tabs.
 8. Export **Tracks CSV** (every sample), **Summary CSV** (one row per bee plus an "all" row per recording, across all recordings), or **Export to PER Scorer**.
 
 Use **New recording** for each video. It copies the arena, zones and settings, which suits a fixed camera. Give each recording a **Group** to compare groups under **Compare recordings**.
+
+## Desktop app (.exe / .dmg)
+
+`BeeTracker.exe` (Windows) and `BeeTracker.dmg` (macOS) hold the page and the LED helper in one program, so nothing else needs installing. Start it and the page opens in a Chrome or Edge window, already connected to the helper. A small Bee Tracker window shows the DAQ and has **Open Bee Tracker**, **LEDs off** and **Quit**. Keep it open while you work. Quitting turns both LEDs off.
+
+- **LEDs need Windows** with NI's NI-DAQmx driver (ni.com) and the USB-6003 plugged in before the app starts. Without them the LEDs run in simulated mode and everything else works. NI-DAQmx has no macOS driver, so on a Mac the LEDs are always simulated.
+- **First start:** the apps aren't code-signed. On Windows, choose *More info → Run anyway*. On a Mac, drag Bee Tracker to Applications, open it, then allow it under *System Settings → Privacy & Security → Open Anyway*.
+- Settings are kept per address. The app's page (`http://127.0.0.1:8765/`) doesn't see settings saved while using `bee-tracker.html` as a file, so save and reopen the project file to move between them.
+- Get the builds from the **Desktop app** workflow on GitHub (Actions → Desktop app → Run workflow, or push a tag such as `v1.0` to attach them to a release). To build one yourself: `pip install pyinstaller numpy` (plus `nidaqmx` on Windows), then `python tools/package.py`. PyInstaller can't cross-build, so build the .exe on Windows and the .dmg on a Mac.
+
+## LED protocols
+
+With the camera, each trial can play an LED protocol on the two analog outputs (ao0, ao1) of an NI USB-6003. The page sends the protocol to the **LED helper**, a small program that has to be running on the same computer; the page can't start it. `bee-tracker.html` on its own has no helper: use the desktop app, or run `py helper\led_helper.py` and type the code it prints.
+
+A protocol is a list of **segments**. Each has a length, an optional **condition label**, and a function for each LED:
+
+| Function | Settings |
+|---|---|
+| Off, Constant | level (V) |
+| Ramp | from, to (V), straight over the segment |
+| Exponential | from, to (V), time constant τ (s) |
+| Sine | frequency (Hz), midpoint and ± amplitude (V), phase (°) |
+| Pulse train | rate (Hz), duty cycle (%), on and off levels (V) |
+| Single pulse | delay and width (s), level (V) |
+| Random levels | min and max (V), hold time (s), seed (the same seed gives the same levels) |
+| Formula | any formula of `t` (s into the segment) and `d` (segment length), e.g. `2.5 + 2*sin(2*pi*t)` or `3*(t < 0.5)`; `sin cos tan exp log sqrt abs floor ceil round min max mod clamp`, `pi`, `e`, `^` and comparisons work |
+
+The protocol can repeat, and the segment order can be shuffled within each repeat (the order is saved with the trial). The preview shows both outputs; a segment that goes outside the helper's 0–5 V, or whose formula doesn't work, is marked and can't be played. The helper builds the waveform at 1000 levels per second and plays it on the DAQ's own clock, so pulse trains are exact up to about 100 Hz.
+
+Results, the **LED conditions CSV** and PER Scorer behaviors are grouped by condition: a segment's label, or what its LEDs do when it has none (e.g. `Blue 2 V`). The **LED log CSV** lists every segment each LED played, with its function. Protocols made before functions existed open as constant segments.
 
 ## Recording setup (matters more than any setting)
 
@@ -68,6 +98,8 @@ Each tracked bee becomes a PER Scorer bee. **Moving** and **In \<zone\>** become
 src/core.js         detection, tracking and metrics (pure functions, also run by Node tests)
 src/page.html       the page; /*@CORE@*/ is replaced with core.js
 tools/build.py      writes bee-tracker.html  ← edit src/, then run this
+app/bee_tracker_app.py  the desktop app: LED helper + page server + launcher
+tools/package.py        builds dist/BeeTracker.exe or dist/BeeTracker.dmg
 tools/make_synthetic.py
 tests/core.test.cjs                 node --test tests/core.test.cjs
 tests/e2e_synthetic.py              python3 tests/e2e_synthetic.py /tmp/synth [play|seek]

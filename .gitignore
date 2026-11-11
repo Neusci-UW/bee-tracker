@@ -3,3 +3,5 @@ __pycache__/
 synthetic/
 tests/*.png
 .DS_Store
+build/
+dist/

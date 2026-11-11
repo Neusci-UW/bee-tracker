@@ -103,6 +103,18 @@ tr.pooled td{font-weight:600;background:var(--soft)}
 @media (max-width:1050px){.res-grid{grid-template-columns:minmax(0,1fr)}}
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
 .chart text{font-family:var(--sans);font-size:11px;fill:var(--muted)}
+.ledsegs{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:420px}
+.ledseg{border:1px solid var(--line);border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;gap:5px}
+.ledseg .row{gap:4px;flex-wrap:nowrap}
+.ledseg .row button{padding:4px 5px}
+.ledout{display:grid;grid-template-columns:56px minmax(0,150px) minmax(0,1fr);gap:4px 6px;align-items:center}
+.ledout .ledps.wide{grid-column:2/-1}
+.ledout .nm{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ledps{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.ledps label{display:flex;gap:3px;align-items:center}
+.ledps input[type=number]{width:62px;padding:3px 5px}
+.ledps input.expr{width:100%;min-width:160px;font-family:var(--mono);padding:3px 6px}
+.ledseg.bad{border-color:var(--bad)}
 .pv{font-family:var(--mono);font-size:12px}
 .pv.sig{color:var(--accent);font-weight:600}
 .checks{display:flex;flex-wrap:wrap;gap:4px 14px}
@@ -195,6 +207,7 @@ body.mode-camera .file-only, body.mode-file .cam-only{display:none!important}
             <label><input type="checkbox" id="vTrails" checked> Show tracks</label>
           </div>
         </div>
+        <div class="row" id="selBar" hidden><span class="msg" id="selName"></span><button id="selDel"></button><button class="ghost" id="selNone">Keep it</button></div>
         <p class="help" id="drawHelp">Draw the arena first: press <b>Draw arena</b>, then drag a box around the floor of the arena on the video.</p>
       </section>
 
@@ -300,8 +313,9 @@ body.mode-camera .file-only, body.mode-file .cam-only{display:none!important}
           <div class="f"><label for="led-n0">Name for ao0</label><input id="led-n0" placeholder="ao0" maxlength="24"></div>
           <div class="f"><label for="led-n1">Name for ao1</label><input id="led-n1" placeholder="ao1" maxlength="24"></div>
         </div>
-        <div class="tbl-wrap" style="max-height:260px"><table id="ledSteps"></table></div>
-        <div class="row"><button id="ledAdd">Add step</button><label for="led-rep">Repeat</label><input id="led-rep" type="number" min="1" max="200" step="1" style="width:64px"><span class="help">times</span></div>
+        <div class="ledsegs" id="ledSegs"></div>
+        <div class="row"><button id="ledAdd">Add segment</button><label for="led-rep">Repeat</label><input id="led-rep" type="number" min="1" max="200" step="1" style="width:64px"><span class="help">times</span>
+          <label><input type="checkbox" id="led-shuf"> Shuffle segments each repeat</label></div>
         <div class="chart" id="ledPrev"></div>
         <p class="msg" id="ledSum"></p>
         <div class="checks" style="flex-direction:column;align-items:flex-start">
@@ -310,7 +324,7 @@ body.mode-camera .file-only, body.mode-file .cam-only{display:none!important}
         </div>
         <div class="row"><button id="ledTest" title="Each output at its highest protocol level for 1 s, one after the other">Test LEDs</button><button id="ledOff">All off</button></div>
         <div class="row"><button id="bLight" title="Drag a small box over an LED, or its glow, that the camera can see">Draw light check</button><button class="ghost" id="bLightClear" hidden>Remove light check</button></div>
-        <p class="help">Start the LED helper on this computer (<span class="mono">py helper\led_helper.py</span>) and type the code it prints. Each step holds both outputs at the levels you set for that long; the whole protocol is played by the DAQ's own clock. Start trial starts it on the trial's first frame, and stopping the trial turns both LEDs off. A <b>light check</b> box over an LED in view measures how late the camera sees each change.</p>
+        <p class="help">The LEDs need the LED helper running on this computer: open the Bee Tracker app (BeeTracker.exe or BeeTracker.dmg), which opens this page already connected, or run <span class="mono">py helper\led_helper.py</span> and type the code it prints. Each segment drives both outputs for its length: a constant level, a ramp, sine, pulse train, single pulse, random levels, or a formula of <span class="mono">t</span> (seconds into the segment; <span class="mono">d</span> is its length, and <span class="mono">sin cos exp log sqrt abs min max mod clamp floor ceil round</span>, <span class="mono">pi</span>, <span class="mono">^</span> and comparisons such as <span class="mono">(t &lt; 2)</span> work). Results are grouped by each segment's label, or by what the LEDs do if it has none. The whole protocol is played by the DAQ's own clock, 1000 levels per second. Start trial starts it on the trial's first frame, and stopping the trial turns both LEDs off. A <b>light check</b> box over an LED in view measures how late the camera sees each change.</p>
       </section>
 
       <section class="panel" aria-label="Data">
@@ -774,12 +788,223 @@ function matchLatency(ref, cam, maxLag){
   return out;
 }
 
+/* ---------- LED protocol: segments, each output following a function of time ---------- */
+// A protocol is segments of {label, dur (s), ao0: fn, ao1: fn}; fn = {fn: name, ...params}, with t = seconds into the segment.
+// helper/led_helper.py builds the DAQ's waveform from the same definitions: change both together.
+const LED_FNS = {
+  off:     {name: 'Off', params: []},
+  const:   {name: 'Constant', params: [['v', 'V', 2]]},
+  ramp:    {name: 'Ramp', params: [['from', 'from V', 0], ['to', 'to V', 4]]},
+  exp:     {name: 'Exponential', params: [['from', 'from V', 4], ['to', 'to V', 0], ['tau', 'τ s', 2]]},
+  sine:    {name: 'Sine', params: [['freq', 'Hz', 0.5], ['mid', 'mid V', 2.5], ['amp', '± V', 2], ['phase', 'phase °', 0]]},
+  pulses:  {name: 'Pulse train', params: [['freq', 'Hz', 10], ['duty', 'duty %', 50], ['on', 'on V', 3], ['off', 'off V', 0]]},
+  pulse:   {name: 'Single pulse', params: [['delay', 'delay s', 1], ['width', 'width s', 0.5], ['v', 'V', 3]]},
+  random:  {name: 'Random levels', params: [['min', 'min V', 0], ['max', 'max V', 3], ['hold', 'hold s', 0.5], ['seed', 'seed', 1]]},
+  formula: {name: 'Formula', params: [['expr', 'f(t) =', '2.5 + 2*sin(2*pi*t)']]},
+};
+function ledFn(name, params){
+  const f = {fn: Object.hasOwn(LED_FNS, name) ? name : 'off'};
+  LED_FNS[f.fn].params.forEach(([k, , d]) => { f[k] = params && params[k] != null ? params[k] : d; });
+  return f;
+}
+
+// Formulas: numbers, t (s into the segment), d (segment length), pi, e; + - * / ^, comparisons (1 or 0), and
+// sin cos tan abs sqrt exp log floor ceil round min max mod clamp. Parsed, never run as code.
+const FORMULA_FNS = {sin: [1, Math.sin], cos: [1, Math.cos], tan: [1, Math.tan], abs: [1, Math.abs], sqrt: [1, Math.sqrt],
+  exp: [1, Math.exp], log: [1, Math.log], floor: [1, Math.floor], ceil: [1, Math.ceil], round: [1, x => Math.floor(x + 0.5)],
+  min: [2, Math.min], max: [2, Math.max], mod: [2, (a, b) => a - b * Math.floor(a / b)], clamp: [3, (x, a, b) => Math.min(Math.max(x, a), b)]};
+function parseFormula(src){
+  src = String(src == null ? '' : src);
+  if(!src.trim()) throw new Error('The formula is empty.');
+  if(src.length > 300) throw new Error('The formula is longer than 300 characters.');
+  const toks = [], re = /\s*(?:(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?)|([a-z_]\w*)|(<=|>=|[-+*/^(),<>]))/iy;
+  let m;
+  re.lastIndex = 0;
+  while(re.lastIndex < src.length){
+    const at = re.lastIndex;
+    if(!(m = re.exec(src))){ if(/^\s*$/.test(src.slice(at))) break; throw new Error(`The formula has a character it can’t use: “${src.slice(at).trim()[0]}”.`); }
+    toks.push(m[1] != null ? {n: +m[1]} : m[2] != null ? {id: m[2].toLowerCase()} : {op: m[3]});
+  }
+  let i = 0;
+  const peek = () => toks[i], isOp = o => toks[i] && toks[i].op === o;
+  const need = o => { if(!isOp(o)) throw new Error(`The formula is missing “${o}”.`); i++; };
+  function cmp(){
+    const a = sum();
+    if(toks[i] && ['<', '<=', '>', '>='].includes(toks[i].op)){
+      const o = toks[i++].op, b = sum();
+      return o === '<' ? (t, d) => +(a(t, d) < b(t, d)) : o === '<=' ? (t, d) => +(a(t, d) <= b(t, d))
+        : o === '>' ? (t, d) => +(a(t, d) > b(t, d)) : (t, d) => +(a(t, d) >= b(t, d));
+    }
+    return a;
+  }
+  function sum(){
+    let a = prod();
+    while(isOp('+') || isOp('-')){ const o = toks[i++].op, x = a, b = prod(); a = o === '+' ? (t, d) => x(t, d) + b(t, d) : (t, d) => x(t, d) - b(t, d); }
+    return a;
+  }
+  function prod(){
+    let a = unary();
+    while(isOp('*') || isOp('/')){ const o = toks[i++].op, x = a, b = unary(); a = o === '*' ? (t, d) => x(t, d) * b(t, d) : (t, d) => x(t, d) / b(t, d); }
+    return a;
+  }
+  function unary(){
+    if(isOp('-')){ i++; const a = unary(); return (t, d) => -a(t, d); }
+    if(isOp('+')){ i++; return unary(); }
+    const a = atom();
+    if(isOp('^')){ i++; const b = unary(); return (t, d) => Math.pow(a(t, d), b(t, d)); }
+    return a;
+  }
+  function atom(){
+    const k = peek();
+    if(!k) throw new Error('The formula ends too early.');
+    i++;
+    if(k.n != null){ const v = k.n; return () => v; }
+    if(k.op === '('){ const a = cmp(); need(')'); return a; }
+    if(k.id != null){
+      if(k.id === 't') return t => t;
+      if(k.id === 'd') return (t, d) => d;
+      if(k.id === 'pi') return () => Math.PI;
+      if(k.id === 'e') return () => Math.E;
+      const f = Object.hasOwn(FORMULA_FNS, k.id) && FORMULA_FNS[k.id];
+      if(!f) throw new Error(`The formula uses “${k.id}”, which it doesn’t know. Use t, d, pi, e, or a function such as sin(…).`);
+      need('(');
+      const args = [cmp()];
+      while(isOp(',')){ i++; args.push(cmp()); }
+      need(')');
+      if(args.length !== f[0]) throw new Error(`${k.id}(…) takes ${f[0]} value${f[0] === 1 ? '' : 's'}.`);
+      const g = f[1];
+      return args.length === 1 ? (t, d) => g(args[0](t, d)) : args.length === 2 ? (t, d) => g(args[0](t, d), args[1](t, d))
+        : (t, d) => g(args[0](t, d), args[1](t, d), args[2](t, d));
+    }
+    throw new Error(`The formula has “${k.op}” where a number or name should be.`);
+  }
+  const f = cmp();
+  if(i < toks.length) throw new Error(`The formula has something extra at “${toks[i].op || toks[i].id || toks[i].n}”.`);
+  return f;
+}
+// Random levels: the same hash as the helper's, so the page knows exactly what was played.
+function hash01(seed, k){
+  let h = Math.imul(seed ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul(k + 1, 0xC2B2AE35);
+  h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B); h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+// Problems with one output's settings, as sentences (empty if fine).
+function ledFnProblems(f){
+  if(!f || !Object.hasOwn(LED_FNS, f.fn)) return ['Unknown function.'];
+  const def = LED_FNS[f.fn];
+  if(f.fn === 'formula'){ try{ parseFormula(f.expr); return []; }catch(e){ return [e.message]; } }
+  const p = [];
+  def.params.forEach(([k, label]) => { if(!(typeof f[k] === 'number' && isFinite(f[k]))) p.push(`${label.replace(/ (V|s|Hz|%|°)$/, '')} must be a number.`); });
+  if(p.length) return p;
+  if(f.fn === 'exp' && !(f.tau > 0)) p.push('τ must be more than 0 s.');
+  if(f.fn === 'pulses' && !(f.freq > 0)) p.push('The pulse rate must be more than 0 Hz.');
+  if(f.fn === 'pulses' && !(f.duty > 0 && f.duty < 100)) p.push('The duty cycle must be between 0 and 100%.');
+  if(f.fn === 'sine' && f.freq < 0) p.push('The frequency can’t be negative.');
+  if(f.fn === 'pulse' && (f.delay < 0 || !(f.width > 0))) p.push('The pulse needs a delay of 0 s or more and a width over 0 s.');
+  if(f.fn === 'random' && !(f.hold >= 0.001)) p.push('Each random level must hold for at least 0.001 s.');
+  if(f.fn === 'random' && !(Number.isInteger(f.seed) && f.seed >= 0 && f.seed < 2 ** 31)) p.push('The seed must be a whole number from 0.');
+  return p;
+}
+// A function of (t, d) for one output's settings; call ledFnProblems first.
+function ledEval(f){
+  switch(f && f.fn){
+    case 'const': return () => f.v;
+    case 'ramp': return (t, d) => f.from + (f.to - f.from) * t / d;
+    case 'exp': return t => f.to + (f.from - f.to) * Math.exp(-t / f.tau);
+    case 'sine': return t => f.mid + f.amp * Math.sin(2 * Math.PI * f.freq * t + f.phase * Math.PI / 180);
+    case 'pulses': return t => { const x = t * f.freq; return x - Math.floor(x) < f.duty / 100 - 1e-9 ? f.on : f.off; };
+    case 'pulse': return t => t >= f.delay - 1e-9 && t < f.delay + f.width - 1e-9 ? f.v : 0;
+    case 'random': return t => f.min + (f.max - f.min) * hash01(f.seed, Math.floor(t / f.hold + 1e-9));
+    case 'formula': return parseFormula(f.expr);
+    default: return () => 0;
+  }
+}
+// (Edges get 1e-9 s of slack, so one that falls on a sample time, like 0.2 + 0.1 s, lands the same way every time.)
+// Samples per segment, as the helper counts them.
+const ledSamples = (dur, rate) => Math.max(1, Math.round(dur * rate));
+// Lowest and highest level of one output over a segment, at the DAQ's sample times (NaN if a formula breaks).
+function ledRange(f, dur, rate){
+  const g = ledEval(f), n = ledSamples(dur, rate);
+  let lo = Infinity, hi = -Infinity;
+  for(let j = 0; j < n; j++){ const v = g(j / rate, dur); if(!isFinite(v)) return {lo: NaN, hi: NaN, at: j / rate}; if(v < lo) lo = v; if(v > hi) hi = v; }
+  return {lo, hi};
+}
+// Short description of what one output does, e.g. "2 V", "ramp 0–4 V", "10 Hz pulses 3 V".
+function ledDescribe(f){
+  const v = x => (Math.round(x * 100) / 100);
+  switch(f && f.fn){
+    case 'const': return v(f.v) + ' V';
+    case 'ramp': return `ramp ${v(f.from)}–${v(f.to)} V`;
+    case 'exp': return `exp ${v(f.from)}→${v(f.to)} V, τ ${v(f.tau)} s`;
+    case 'sine': return `sine ${v(f.freq)} Hz, ${v(f.mid)} ± ${v(f.amp)} V` + (f.phase ? `, ${v(f.phase)}°` : '');
+    case 'pulses': return `${v(f.freq)} Hz pulses ${v(f.on)} V, ${v(f.duty)}%` + (f.off ? ` (off ${v(f.off)} V)` : '');
+    case 'pulse': return `pulse ${v(f.v)} V at ${v(f.delay)}–${v(f.delay + f.width)} s`;
+    case 'random': return `random ${v(f.min)}–${v(f.max)} V every ${v(f.hold)} s`;
+    case 'formula': return 'f(t) = ' + String(f.expr).trim();
+    default: return 'off';
+  }
+}
+const ledIsOff = f => !f || f.fn === 'off' || (f.fn === 'const' && f.v === 0);
+// The condition a segment counts as: its label, or else what the LEDs do ("Blue 2 V + Green sine 1 Hz, …").
+function ledConditionName(seg, names){
+  const lab = String(seg.label || '').trim();
+  if(lab) return lab;
+  const on = ['ao0', 'ao1'].filter(o => !ledIsOff(seg[o])).map(o => `${(names && names[o]) || o} ${ledDescribe(seg[o])}`);
+  return on.join(' + ') || 'No stimulus';
+}
+// Segments in play order: the protocol `repeats` times, shuffled within each repeat when asked (seeded, so it can be logged).
+function ledSequence(led, seed){
+  const segs = led.segs || [], out = [];
+  let s = (seed >>> 0) || 1;
+  const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  for(let r = 0; r < Math.max(1, led.repeats | 0); r++){
+    const idx = segs.map((_, k) => k);
+    if(led.shuffle) for(let k = idx.length - 1; k > 0; k--){ const j = Math.floor(rnd() * (k + 1)); [idx[k], idx[j]] = [idx[j], idx[k]]; }
+    idx.forEach(k => out.push(Object.assign({index: k, repeat: r + 1}, segs[k])));
+  }
+  return out;
+}
+// What was played, on the trial clock: conditions over [0, tEnd] (gaps are "No stimulus"),
+// one event per segment and lit output, and the times an output went from 0 V to on (for the light check).
+// starts: each segment's start in s after the protocol began (from the helper); t0: protocol start in trial s.
+function ledPlayed(seq, starts, t0, tEnd, rate, names){
+  const conditions = [], events = [], onsets = [];
+  const add = (a, b, key) => { if(b <= a) return; const last = conditions[conditions.length - 1];
+    if(last && last.key === key && Math.abs(last.t1 - a) < 1e-6) last.t1 = b; else conditions.push({t0: a, t1: b, key}); };
+  let prevEnd = 0;
+  const lastOn = {ao0: false, ao1: false};
+  seq.forEach((s, i) => {
+    const a = t0 + starts[i], b = a + ledSamples(s.dur, rate) / rate;
+    if(a >= tEnd) return;
+    const key = ledConditionName(s, names), end = Math.min(b, tEnd);
+    add(Math.max(prevEnd, 0), Math.max(0, a), 'No stimulus');
+    add(Math.max(a, 0), end, key);
+    prevEnd = end;
+    ['ao0', 'ao1'].forEach(o => {
+      const f = s[o], g = ledEval(f), n = Math.min(ledSamples(s.dur, rate), Math.ceil((end - a) * rate - 1e-6));
+      if(ledIsOff(f)){ lastOn[o] = false; return; }
+      let lo = Infinity, hi = -Infinity;
+      for(let j = 0; j < n; j++){
+        const v = g(j / rate, s.dur), on = v > 0;
+        if(on && !lastOn[o] && onsets.length < 20000) onsets.push(+(a + j / rate).toFixed(4));
+        lastOn[o] = on; if(v < lo) lo = v; if(v > hi) hi = v;
+      }
+      if(n > 0) events.push({t: +a.toFixed(4), dur: +(end - a).toFixed(4), output: (names && names[o]) || o, channel: o, segment: s.index + 1, repeat: s.repeat,
+        label: key, fn: ledDescribe(f), peak: +hi.toFixed(4), low: +lo.toFixed(4), segs: [[0, +(end - a).toFixed(4), +hi.toFixed(4)]]});
+    });
+  });
+  add(Math.max(prevEnd, 0), tEnd, 'No stimulus');
+  events.sort((x, y) => x.t - y.t || x.channel.localeCompare(y.channel)).forEach((e, k) => { e.seq = k + 1; });
+  return {conditions, events, onsets: onsets.sort((x, y) => x - y)};
+}
+
 // Count separate merge episodes (runs of merged samples).
 function episodes(flags){ let n = 0, prev = false; flags.forEach(f => { if(f && !prev) n++; prev = !!f; }); return n; }
 
 return {inside, inset, procGeometry, toVideo, toProc, shapeMask, toLuma, maskedMedian, medianBackground, foreground, open3,
   findBlobs, splitBlob, detect, estimateBeeArea, hungarian, assign, createTracker, segments, metrics, nearestNeighbour, episodes,
-  lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel};
+  lightConditions, conditionAt, lightChanges, matchLatency, fmtLevel,
+  LED_FNS, ledFn, parseFormula, hash01, ledFnProblems, ledEval, ledSamples, ledRange, ledDescribe, ledIsOff, ledConditionName, ledSequence, ledPlayed};
 })();
 if(typeof module !== 'undefined') module.exports = BeeCore;
 
@@ -807,10 +1032,20 @@ function defaults(){
     met: {smooth: 0.2, moveThr: 3, maxGap: 0.5, minBout: 0.3},
   };
 }
-// LED protocol: steps of {dur (s), ao0 (V), ao1 (V)}, played `repeats` times.
+// LED protocol: segments of {label, dur (s), ao0: fn, ao1: fn} (see LED_FNS in core.js), played `repeats` times,
+// optionally shuffled within each repeat.
+const ledSeg = (dur, ao0, ao1, label) => ({label: label || '', dur, ao0: ao0 || C.ledFn('off'), ao1: ao1 || C.ledFn('off')});
 function defaultLed(){
-  return {names: {ao0: '', ao1: ''}, repeats: 1,
-    steps: [{dur: 30, ao0: 0, ao1: 0}, {dur: 10, ao0: 2, ao1: 0}, {dur: 20, ao0: 0, ao1: 0}, {dur: 10, ao0: 0, ao1: 2}, {dur: 20, ao0: 0, ao1: 0}]};
+  const on = v => C.ledFn('const', {v});
+  return {names: {ao0: '', ao1: ''}, repeats: 1, shuffle: false,
+    segs: [ledSeg(30), ledSeg(10, on(2)), ledSeg(20), ledSeg(10, null, on(2)), ledSeg(20)]};
+}
+// Protocols saved before functions: steps of {dur, ao0: V, ao1: V} become constant segments.
+function migrateLed(L){
+  L = Object.assign({names: {ao0: '', ao1: ''}, repeats: 1, shuffle: false}, L);
+  if(!L.segs) L.segs = (L.steps || []).map(st => ledSeg(st.dur, ...['ao0', 'ao1'].map(o => +st[o] ? C.ledFn('const', {v: +st[o]}) : C.ledFn('off'))));
+  delete L.steps;
+  return L;
 }
 function newRec(from){
   const word = S && S.ui && S.ui.mode === 'file' ? 'Recording ' : 'Trial ';
@@ -825,7 +1060,7 @@ let S = null;
 S = load() || emptyState();
 if(!S.recs.length){ const r = newRec(); S.recs.push(r); S.current = r.id; }
 function migrate(s){
-  s.recs.forEach(r => { const d = defaults(); r.cfg = Object.assign(d, r.cfg); ['det','trk','met'].forEach(k => r.cfg[k] = Object.assign(defaults()[k], r.cfg[k])); });
+  s.recs.forEach(r => { const d = defaults(); r.cfg = Object.assign(d, r.cfg); ['det','trk','met'].forEach(k => r.cfg[k] = Object.assign(defaults()[k], r.cfg[k])); r.cfg.led = migrateLed(r.cfg.led); });
   if(!s.recs.find(r => r.id === s.current)) s.current = s.recs[0]?.id;
   s.ui = Object.assign({mode: 'camera'}, s.ui);
   s.ui.led = Object.assign({url: 'http://127.0.0.1:8765', code: '', run: false, end: true}, s.ui.led);
@@ -833,6 +1068,9 @@ function migrate(s){
   return s;
 }
 S = migrate(S);
+// The desktop app serves this page from the LED helper and passes its code in the address (#led-code=123456).
+{ const m = /[#&]led-code=(\d{6})/.exec(location.hash);
+  if(m){ S.ui.led.url = location.origin; S.ui.led.code = m[1]; history.replaceState(null, '', location.pathname + location.search); } }
 function load(){ try{ const s = JSON.parse(localStorage.getItem(STORE)); return s && s.recs ? s : null; }catch(e){ return null; } }
 let saveT, warnedQuota = false;
 function save(){ clearTimeout(saveT); saveT = setTimeout(() => { try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){ if(!warnedQuota){ warnedQuota = true; toast('Too much data to keep in browser storage. Save the project file.'); } } }, 400); }
@@ -1041,7 +1279,7 @@ function pathShape(ctx, s, R){
 /* ---------- drawing arena and zones ---------- */
 let drawMode = null, drag = null;
 function setDrawMode(m){
-  drawMode = drawMode === m ? null : m; drag = null;
+  drawMode = drawMode === m ? null : m; drag = null; sel = null; renderSel();
   stage.classList.toggle('drawing', !!drawMode);
   $('bArena').classList.toggle('on', drawMode === 'arena'); $('bZone').classList.toggle('on', drawMode === 'zone');
   renderDrawHelp(); draw();
@@ -1057,12 +1295,60 @@ function renderDrawHelp(){
     : !c.det.beeAreaVid ? (mode() === 'camera' ? 'Next: with every bee in view and apart, press <b>Test on this frame</b>, adjust the threshold until each bee is one magenta blob, then <b>Measure bee size</b>.' : 'Next: pause on a frame where every bee is visible and apart, press <b>Test on this frame</b>, adjust the threshold, then <b>Measure bee size</b>.')
     : mode() === 'camera' ? 'Ready: press <b>Start trial</b>. Zones can be added or changed afterwards; results update without another trial.'
     : 'Ready to track. Zones can be added or changed after tracking; results update without tracking again.';
+  if(!drawMode && hasVideo && (c.arena || c.zones.length || c.lightRoi)) $('drawHelp').innerHTML += ' To remove a shape, click its outline on the video.';
 }
+// Picking a shape on the video to remove it: the light check anywhere inside, zones and the arena near their outline
+// (so clicking inside the arena still plays and pauses a video).
+let sel = null;                 // {kind: 'arena' | 'zone' | 'light', id}
+function shapeHit(c, [x, y], tol){
+  const near = (s, inside) => {
+    if(s.type === 'rect'){
+      const inBox = x >= s.x - tol && x <= s.x + s.w + tol && y >= s.y - tol && y <= s.y + s.h + tol;
+      return inBox && (inside || Math.min(Math.abs(x - s.x), Math.abs(x - s.x - s.w), Math.abs(y - s.y), Math.abs(y - s.y - s.h)) <= tol);
+    }
+    const rx = s.w / 2, ry = s.h / 2, r = Math.hypot((x - s.x - rx) / rx, (y - s.y - ry) / ry);
+    return (inside && r <= 1) || Math.abs(r - 1) * Math.min(rx, ry) <= tol;
+  };
+  if(c.lightRoi && near(c.lightRoi, true)) return {kind: 'light'};
+  for(let i = c.zones.length - 1; i >= 0; i--) if(near(c.zones[i].shape, false)) return {kind: 'zone', id: c.zones[i].id};
+  if(c.arena && near(c.arena, false)) return {kind: 'arena'};
+  return null;
+}
+function selShape(c){
+  if(!sel) return null;
+  if(sel.kind === 'arena') return c.arena && {shape: c.arena, name: 'the arena'};
+  if(sel.kind === 'light') return c.lightRoi && {shape: c.lightRoi, name: 'the light check'};
+  const z = c.zones.find(q => q.id === sel.id); return z && {shape: z.shape, name: z.name};
+}
+function renderSel(){
+  const c = cfg(), s = selShape(c);
+  if(!s) sel = null;
+  $('selBar').hidden = !s;
+  if(s){ $('selName').textContent = `Selected: ${s.name}.`; $('selDel').textContent = 'Remove ' + s.name; }
+}
+function pick(h){ sel = h; renderSel(); draw(); }
+function removeSelected(){
+  const r = rec(), c = r.cfg, s = selShape(c); if(!s) return;
+  if(sel.kind === 'arena'){
+    if(r.result && !confirm('Remove the arena? This recording’s results lose their mm scale and edge band until you draw it again.')) return;
+    c.arena = null; invalidateBg();
+  } else if(sel.kind === 'light') c.lightRoi = null;
+  else c.zones = c.zones.filter(z => z.id !== sel.id);
+  sel = null; changed(); toast(s.name[0].toUpperCase() + s.name.slice(1) + ' removed.');
+}
+$('selDel').onclick = removeSelected;
+$('selNone').onclick = () => pick(null);
 $('bArena').onclick = () => { if(!ready()) return toast('Open a video first.'); setDrawMode('arena'); };
 $('bZone').onclick = () => { if(!ready()) return toast('Open a video first.'); if(!cfg().arena) return toast('Draw the arena first.'); setDrawMode('zone'); };
 $('arenaShape').onchange = e => { const c = cfg(); if(c.arena){ c.arena.type = e.target.value; invalidateBg(); changed(); } };
 ov.addEventListener('pointerdown', ev => {
-  if(!drawMode){ if(mode() === 'file') togglePlay(); return; }
+  if(!drawMode){
+    const h = hasVideo ? shapeHit(cfg(), c2v(ev), 8 / contentRect().k) : null;
+    if(h){ pick(h); return; }
+    if(sel){ pick(null); return; }
+    if(mode() === 'file') togglePlay();
+    return;
+  }
   ov.setPointerCapture(ev.pointerId); const p = c2v(ev); drag = {x0: p[0], y0: p[1], x1: p[0], y1: p[1]}; draw();
 });
 ov.addEventListener('pointermove', ev => { if(!drag) return; const p = c2v(ev); drag.x1 = p[0]; drag.y1 = p[1]; draw(); });
@@ -1339,7 +1625,7 @@ async function agFetch(path, method, body){
     res = await fetch(agUrl() + path, {method: method || 'GET', cache: 'no-store',
       headers: Object.assign({'X-Led-Code': (S.ui.led.code || '').trim()}, body ? {'Content-Type': 'application/json'} : {}),
       body: body ? JSON.stringify(body) : undefined});
-  }catch(e){ throw new Error(`Can’t reach the LED helper at ${agUrl()}. Is it running? (py helper\\led_helper.py)`); }
+  }catch(e){ throw new Error(`Can’t reach the LED helper at ${agUrl()}. This page can’t start it: on this computer, open the Bee Tracker app (BeeTracker.exe or BeeTracker.dmg, which opens this page already connected), or run py helper\\led_helper.py and type the code it prints.`); }
   let out = {}; try{ out = await res.json(); }catch(e){}
   if(!res.ok) throw new Error(out.error || out.message || `The LED helper answered ${res.status}.`);
   return out;
@@ -1355,27 +1641,48 @@ async function agSync(n){
   return best.st;
 }
 const limits = () => AG.status ? {lo: AG.status.min_v, hi: AG.status.max_v} : {lo: 0, hi: 5};
-// The steps sent to the helper: the protocol repeated, with levels as numbers.
-function flatSteps(c){
-  const L = c.led, out = [];
-  for(let k = 0; k < Math.max(1, L.repeats | 0); k++) L.steps.forEach(st => out.push({dur: +st.dur, ao0: +st.ao0 || 0, ao1: +st.ao1 || 0}));
-  return out;
+const ledNames = c => ({ao0: ledName(c, 'ao0'), ao1: ledName(c, 'ao1')});
+const LED_RATE = 1000;
+// One output as the helper takes it: a plain number for off/constant (any helper understands), else the function.
+const ledWire = f => f.fn === 'off' ? 0 : f.fn === 'const' ? f.v : f;
+const ledWireSeq = seq => seq.map(s => ({dur: s.dur, ao0: ledWire(s.ao0), ao1: ledWire(s.ao1)}));
+const ledTotal = c => C.ledSequence(c.led, 1).reduce((x, s) => x + (s.dur > 0 ? s.dur : 0), 0);
+// Each output's level range per segment, at the DAQ's sample times; cached, since a long sine takes a moment.
+const ledRangeCache = new Map();
+function ledRangeOf(f, dur){
+  const key = JSON.stringify([f, dur]);
+  if(!ledRangeCache.has(key)){ if(ledRangeCache.size > 500) ledRangeCache.clear(); ledRangeCache.set(key, C.ledRange(f, dur, LED_RATE)); }
+  return ledRangeCache.get(key);
 }
+// Problems with the protocol: per segment ([{i, msg}]), checked against the helper's limits once connected.
 function ledProblems(c){
-  const {lo, hi} = limits(), probs = [];
-  if(!c.led.steps.length) probs.push('Add at least one step.');
-  c.led.steps.forEach((st, i) => {
-    if(!(st.dur > 0)) probs.push(`Step ${i + 1}: the duration must be more than 0 s.`);
-    OUTS.forEach(o => { const v = +st[o] || 0; if(v < lo || v > hi) probs.push(`Step ${i + 1}: ${ledName(c, o)} ${v} V is outside ${lo}–${hi} V${AG.status ? ' (the helper’s limit)' : ''}.`); });
+  const {lo, hi} = limits(), L = c.led, probs = [];
+  if(!L.segs.length) probs.push({i: -1, msg: 'Add at least one segment.'});
+  const oldHelper = AG.status && (AG.status.api || 1) < 2;
+  L.segs.forEach((sg, i) => {
+    const at = m => probs.push({i, msg: `Segment ${i + 1}: ${m}`});
+    if(!(sg.dur > 0)) return at('the length must be more than 0 s.');
+    OUTS.forEach(o => {
+      const f = sg[o], fp = C.ledFnProblems(f), nm = ledName(c, o);
+      if(fp.length) return at(`${nm}: ${fp[0]}`);
+      if(oldHelper && !['off', 'const'].includes(f.fn)) return at(`${nm}: this LED helper only plays constant levels. Update Bee Tracker on the lab computer.`);
+      const r = ledRangeOf(f, sg.dur);
+      if(isNaN(r.lo)) return at(`${nm}: the formula gives no number at t = ${+r.at.toFixed(3)} s.`);
+      if(r.lo < lo - 1e-9 || r.hi > hi + 1e-9) at(`${nm} goes ${r.hi > hi + 1e-9 ? 'up to ' + +r.hi.toFixed(2) : 'down to ' + +r.lo.toFixed(2)} V, outside ${lo}–${hi} V${AG.status ? ' (the helper’s limit)' : ''}.`);
+      if(f.fn === 'pulses' && f.freq > LED_RATE / 10) at(`${nm}: at ${LED_RATE} levels per second, pulses faster than ${LED_RATE / 10} Hz lose their duty cycle.`);
+    });
   });
+  const n = L.segs.length * Math.max(1, L.repeats | 0);
+  if(n > 5000) probs.push({i: -1, msg: `The protocol has ${n} segments with repeats; the helper takes at most 5000.`});
+  if(ledTotal(c) > 4 * 3600) probs.push({i: -1, msg: 'The protocol is longer than 4 hours.'});
   return probs;
 }
 async function agConnect(){
   $('ag-msg').className = 'msg'; $('ag-msg').textContent = 'Connecting…';
   try{
     const st = await agSync(5);
-    $('ag-msg').className = 'msg good';
-    $('ag-msg').textContent = (st.simulated ? 'Connected to the helper in simulated mode (no DAQ): no LEDs will light.' : `Connected: ${st.device} (${st.product}).`) + ` ao0 and ao1 from ${st.min_v} to ${st.max_v} V.`
+    $('ag-msg').className = st.simulated ? 'msg warn' : 'msg good';
+    $('ag-msg').textContent = (st.simulated ? 'Connected to the helper in simulated mode (no DAQ): no LEDs will light.' + (st.note ? ' ' + st.note.replace(/^Simulated LEDs: /, 'Why: ') : '') : `Connected: ${st.device} (${st.product}).`) + ` ao0 and ao1 from ${st.min_v} to ${st.max_v} V.`
       + (st.running ? ' A protocol is playing now.' : '') + (Math.abs(AG.offset) > 50 ? ` The helper’s clock is ${Math.round(AG.offset)} ms off this page’s; that is corrected.` : '');
     if(!S.ui.led.run){ S.ui.led.run = true; save(); }
   }catch(e){ AG.ok = false; $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; }
@@ -1388,42 +1695,89 @@ function renderLedPanel(){
   $('ag-disc').hidden = !AG.ok; $('ag-connect').textContent = AG.ok ? 'Check again' : 'Connect';
   $('ag-end').disabled = !a.run;
   $('led-n0').value = (L.names || {}).ao0 || ''; $('led-n1').value = (L.names || {}).ao1 || '';
-  $('led-rep').value = L.repeats;
+  $('led-rep').value = L.repeats; $('led-shuf').checked = !!L.shuffle;
   $('bLightClear').hidden = !c.lightRoi; $('bLight').textContent = c.lightRoi ? 'Redraw light check' : 'Draw light check';
-  const tb = $('ledSteps');
-  tb.innerHTML = `<thead><tr><th>#</th><th class="num">Seconds</th><th class="num">${esc(ledName(c, 'ao0'))} V</th><th class="num">${esc(ledName(c, 'ao1'))} V</th><th></th></tr></thead><tbody></tbody>`;
-  const body = tb.querySelector('tbody');
-  L.steps.forEach((st, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td>` + ['dur', 'ao0', 'ao1'].map(k => `<td class="num"><input type="number" data-k="${k}" step="${k === 'dur' ? 1 : 0.1}" min="0" value="${st[k]}" style="width:76px" aria-label="Step ${i + 1} ${k}"></td>`).join('')
-      + `<td><button class="ghost" title="Copy this step below">⧉</button><button class="ghost" title="Remove this step">✕</button></td>`;
-    tr.querySelectorAll('input').forEach(inp => inp.onchange = e => { const v = e.target.value === '' ? 0 : +e.target.value; st[e.target.dataset.k] = isFinite(v) ? v : 0; changed(); });
-    const [dup, del] = tr.querySelectorAll('button');
-    dup.onclick = () => { L.steps.splice(i + 1, 0, Object.assign({}, st)); changed(); };
-    del.onclick = () => { L.steps.splice(i, 1); changed(); };
-    body.appendChild(tr);
+  const probs = ledProblems(c), box = $('ledSegs');
+  box.innerHTML = '';
+  L.segs.forEach((sg, i) => {
+    const el = document.createElement('div');
+    el.className = 'ledseg' + (probs.some(p => p.i === i) ? ' bad' : '');
+    el.innerHTML = `<div class="row"><span class="mono help" style="min-width:16px">${i + 1}</span>`
+      + `<input data-k="label" maxlength="40" placeholder="${esc(C.ledConditionName(Object.assign({}, sg, {label: ''}), ledNames(c)))}" value="${esc(sg.label || '')}" style="flex:1;min-width:60px" aria-label="Segment ${i + 1} condition label" title="Condition label: results are grouped by it">`
+      + `<input data-k="dur" type="number" min="0" step="1" value="${sg.dur}" style="width:64px;flex:none" aria-label="Segment ${i + 1} seconds"><span class="help">s</span>`
+      + `<button class="ghost" data-a="up" title="Move up">↑</button><button class="ghost" data-a="dup" title="Copy this segment below">⧉</button><button class="ghost" data-a="del" title="Remove this segment">✕</button></div>`
+      + OUTS.map((o, row) => { const f = sg[o];
+        return `<div class="ledout"><span class="nm" style="color:${COLORS[row]}" title="${esc(ledName(c, o))}">${esc(ledName(c, o))}</span>`
+          + `<select data-o="${o}" aria-label="Segment ${i + 1} ${esc(ledName(c, o))} function">${Object.entries(C.LED_FNS).map(([k, d]) => `<option value="${k}"${k === f.fn ? ' selected' : ''}>${d.name}</option>`).join('')}</select>`
+          + `<span class="ledps${C.LED_FNS[f.fn].params.length > 1 || f.fn === 'formula' ? ' wide' : ''}">${C.LED_FNS[f.fn].params.map(([k, lab]) => k === 'expr'
+              ? `<input class="expr" data-o="${o}" data-p="${k}" value="${esc(f[k])}" spellcheck="false" aria-label="${esc(ledName(c, o))} formula of t" placeholder="2.5 + 2*sin(2*pi*t)">`
+              : `<label class="help">${lab}<input type="number" step="any" data-o="${o}" data-p="${k}" value="${f[k] == null || !isFinite(f[k]) ? '' : f[k]}"></label>`).join('') || '<span class="help">0 V</span>'}</span></div>`; }).join('');
+    el.querySelector('[data-k=label]').onchange = e => { sg.label = e.target.value.trim(); changed(); };
+    el.querySelector('[data-k=dur]').onchange = e => { const v = +e.target.value; sg.dur = isFinite(v) && v > 0 ? v : 0; changed(); };
+    el.querySelectorAll('select[data-o]').forEach(x => x.onchange = e => { sg[x.dataset.o] = C.ledFn(e.target.value); changed(); });
+    el.querySelectorAll('input[data-p]').forEach(x => x.onchange = e => {
+      const f = sg[x.dataset.o], k = x.dataset.p;
+      f[k] = k === 'expr' ? e.target.value : e.target.value === '' ? null : +e.target.value;
+      changed();
+    });
+    el.querySelector('[data-a=up]').onclick = () => { if(i){ [L.segs[i - 1], L.segs[i]] = [L.segs[i], L.segs[i - 1]]; changed(); } };
+    el.querySelector('[data-a=dup]').onclick = () => { L.segs.splice(i + 1, 0, clone(sg)); changed(); };
+    el.querySelector('[data-a=del]').onclick = () => { L.segs.splice(i, 1); changed(); };
+    box.appendChild(el);
   });
-  const probs = ledProblems(c), total = flatSteps(c).reduce((x, s) => x + (s.dur > 0 ? s.dur : 0), 0);
+  const total = ledTotal(c), n = L.segs.length * Math.max(1, L.repeats | 0);
   $('ledSum').className = probs.length ? 'msg bad' : 'msg';
-  $('ledSum').textContent = probs.length ? probs.join(' ') : `${L.steps.length} step${L.steps.length === 1 ? '' : 's'}${L.repeats > 1 ? ' × ' + L.repeats : ''} · ${fmt(total)} in all.`;
-  renderLedPreview(c, total);
-  ['ag-connect', 'ag-run', 'ag-end', 'bLight', 'bLightClear', 'ledAdd', 'led-rep', 'led-n0', 'led-n1', 'ledTest', 'ledOff'].forEach(id => $(id).disabled = !!busy || (id === 'ag-end' && !a.run));
-  tb.querySelectorAll('input,button').forEach(x => x.disabled = !!busy);
+  $('ledSum').textContent = probs.length ? probs.map(p => p.msg).slice(0, 4).join(' ') + (probs.length > 4 ? ` (and ${probs.length - 4} more)` : '')
+    : `${L.segs.length} segment${L.segs.length === 1 ? '' : 's'}${L.repeats > 1 ? ' × ' + L.repeats + (L.shuffle ? ', shuffled each repeat' : '') : ''} · ${n} in all · ${fmt(total)}.`;
+  renderLedPreview(c, total, probs);
+  ['ag-connect', 'ag-run', 'ag-end', 'bLight', 'bLightClear', 'ledAdd', 'led-rep', 'led-shuf', 'led-n0', 'led-n1', 'ledTest', 'ledOff'].forEach(id => $(id).disabled = !!busy || (id === 'ag-end' && !a.run));
+  box.querySelectorAll('input,button,select').forEach(x => x.disabled = !!busy);
 }
-function renderLedPreview(c, total){
+// Both outputs over the whole protocol (in order, before any shuffle). Each pixel column shows the lowest to the
+// highest level in its time span, so a pulse train too fast to draw shows as a band.
+function renderLedPreview(c, total, probs){
   if(!(total > 0)){ $('ledPrev').innerHTML = ''; return; }
-  const W = 360, H = 90, Lm = 40, steps = flatSteps(c), {hi} = limits(), top = Math.max(hi, ...steps.flatMap(s => [s.ao0, s.ao1]));
-  const X = t => Lm + t / total * (W - Lm - 4), Y = (v, row) => row * 44 + 38 - Math.max(0, v) / (top || 1) * 30;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="LED protocol preview">`;
-  OUTS.forEach((o, row) => {
-    let d = '', t = 0;
-    steps.forEach(s => { const y = Y(s[o], row); d += (d ? 'L' : 'M') + X(t).toFixed(1) + ' ' + y.toFixed(1) + 'L' + X(t + s.dur).toFixed(1) + ' ' + y.toFixed(1); t += s.dur; });
-    svg += `<text x="0" y="${row * 44 + 30}">${esc(ledName(c, o).slice(0, 7))}</text><line x1="${Lm}" x2="${W - 4}" y1="${Y(0, row)}" y2="${Y(0, row)}" stroke="var(--line)"/>`
-      + `<path d="${d}" fill="none" stroke="${COLORS[row]}" stroke-width="2"/>`;
+  const W = 360, H = 104, Lm = 40, PW = W - Lm - 4, seq = C.ledSequence(Object.assign({}, c.led, {shuffle: false}), 1).filter(s => s.dur > 0);
+  const {hi} = limits(), bad = new Set(probs.map(p => p.i));
+  const fns = seq.map(s => OUTS.map(o => C.ledFnProblems(s[o]).length ? (() => NaN) : C.ledEval(s[o])));
+  let top = hi;
+  const cols = OUTS.map((o, ch) => {
+    const out = []; let si = 0, s0 = 0;
+    for(let x = 0; x < PW; x++){
+      const ta = x / PW * total, tb = (x + 1) / PW * total;
+      let lo = Infinity, h = -Infinity;
+      while(si < seq.length - 1 && ta >= s0 + seq[si].dur){ s0 += seq[si].dur; si++; }
+      let k = si, kS = s0;
+      while(k < seq.length && kS < tb){
+        const s = seq[k], a = Math.max(ta, kS), b = Math.min(tb, kS + s.dur), ns = Math.min(24, Math.max(2, Math.ceil((b - a) * LED_RATE)));
+        for(let j = 0; j < ns; j++){ const v = fns[k][ch](a - kS + (b - a) * j / (ns - 1) * 0.999, s.dur); if(isFinite(v)){ lo = Math.min(lo, v); h = Math.max(h, v); } }
+        kS += s.dur; k++;
+      }
+      if(h > top) top = h;
+      out.push([lo, h]);
+    }
+    return out;
   });
-  $('ledPrev').innerHTML = svg + `<text x="${W - 4}" y="${H}" text-anchor="end">${fmt(total)}</text></svg>`;
+  const X = t => Lm + t / total * PW, Y = (v, row) => row * 46 + 40 - Math.max(0, Math.min(top, v)) / (top || 1) * 32;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="LED protocol preview">`, t = 0;
+  seq.forEach((s, k) => {
+    if(bad.has(s.index)) svg += `<rect x="${X(t).toFixed(1)}" y="0" width="${(X(t + s.dur) - X(t)).toFixed(1)}" height="88" fill="var(--bad-soft)"/>`;
+    else if(k % 2) svg += `<rect x="${X(t).toFixed(1)}" y="0" width="${(X(t + s.dur) - X(t)).toFixed(1)}" height="88" fill="var(--soft)"/>`;
+    t += s.dur;
+  });
+  OUTS.forEach((o, row) => {
+    const pts = cols[row].map(([lo, h], x) => isFinite(lo) ? [Lm + x + 0.5, Y(h, row), Y(lo, row)] : null).filter(Boolean);
+    const d = pts.map((p, j) => (j ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('') + pts.slice().reverse().map(p => 'L' + p[0].toFixed(1) + ' ' + p[2].toFixed(1)).join('') + 'Z';
+    svg += `<text x="0" y="${row * 46 + 30}">${esc(ledName(c, o).slice(0, 7))}</text><line x1="${Lm}" x2="${W - 4}" y1="${Y(0, row)}" y2="${Y(0, row)}" stroke="var(--line)"/>`
+      + `<text x="${Lm - 4}" y="${Y(top, row) + 4}" text-anchor="end" style="font-size:10px">${+top.toFixed(1)}</text>`
+      + `<path d="${d}" fill="${COLORS[row]}" fill-opacity="0.35" stroke="${COLORS[row]}" stroke-width="1.2" stroke-linejoin="round"/>`;
+  });
+  $('ledPrev').innerHTML = svg + `<text x="${W - 4}" y="${H - 2}" text-anchor="end">${fmt(total)}</text>`
+    + `<text x="${Lm}" y="${H - 2}">V · ${c.led.shuffle && c.led.repeats > 1 ? 'shown in order; shuffled when played' : 'segments shaded alternately'}</text></svg>`;
 }
 $('ag-connect').onclick = agConnect;
+// Opened by the desktop app: its helper served this page, so connect to it straight away.
+if(S.ui.led.code && agUrl() === location.origin){ save(); agConnect(); }
 $('ag-disc').onclick = () => { AG.ok = false; AG.status = null; $('ag-msg').textContent = ''; renderLedPanel(); };
 $('ag-url').onchange = e => { S.ui.led.url = e.target.value.trim() || 'http://127.0.0.1:8765'; AG.ok = false; save(); renderLedPanel(); };
 $('ag-code').onchange = e => { S.ui.led.code = e.target.value.replace(/\D/g, '').slice(0, 6); AG.ok = false; save(); renderLedPanel(); };
@@ -1432,39 +1786,24 @@ $('ag-end').onchange = e => { S.ui.led.end = e.target.checked; save(); };
 $('led-n0').onchange = e => { cfg().led.names.ao0 = e.target.value.trim(); changed(); };
 $('led-n1').onchange = e => { cfg().led.names.ao1 = e.target.value.trim(); changed(); };
 $('led-rep').onchange = e => { cfg().led.repeats = Math.max(1, Math.min(200, Math.round(+e.target.value || 1))); changed(); };
-$('ledAdd').onclick = () => { const L = cfg().led, last = L.steps[L.steps.length - 1]; L.steps.push(last ? Object.assign({}, last) : {dur: 10, ao0: 0, ao1: 0}); changed(); };
+$('led-shuf').onchange = e => { cfg().led.shuffle = e.target.checked; changed(); };
+$('ledAdd').onclick = () => { const L = cfg().led, last = L.segs[L.segs.length - 1]; L.segs.push(last ? Object.assign(clone(last), {label: ''}) : ledSeg(10)); changed(); };
+// Each output at its highest level in the protocol for 1 s, one after the other.
 $('ledTest').onclick = async () => {
   if(!AG.ok) return toast('Connect to the LED helper first.');
   const c = cfg(), steps = [];
-  OUTS.forEach(o => { const v = Math.max(0, ...c.led.steps.map(s => +s[o] || 0)); if(v > 0) steps.push(Object.assign({dur: 1, ao0: 0, ao1: 0}, {[o]: v})); });
+  OUTS.forEach(o => {
+    const v = Math.max(0, ...c.led.segs.filter(sg => sg.dur > 0 && !C.ledFnProblems(sg[o]).length).map(sg => ledRangeOf(sg[o], sg.dur).hi).filter(isFinite));
+    if(v > 0) steps.push(Object.assign({dur: 1, ao0: 0, ao1: 0}, {[o]: Math.min(v, limits().hi)}));
+  });
   if(!steps.length) return toast('Every level in the protocol is 0 V, so there is nothing to test.');
-  try{ const r = await agFetch('/api/run', 'POST', {steps, rate: 1000}); if(!r.ok) throw new Error(r.message); toast(steps.map(s => OUTS.filter(o => s[o]).map(o => `${ledName(c, o)} ${s[o]} V`)).join(', then ') + ', 1 s each.'); }
+  try{ const r = await agFetch('/api/run', 'POST', {steps, rate: LED_RATE}); if(!r.ok) throw new Error(r.message); toast(steps.map(s => OUTS.filter(o => s[o]).map(o => `${ledName(c, o)} ${+s[o].toFixed(2)} V`)).join(', then ') + ', 1 s each' + (AG.status && AG.status.simulated ? ' (simulated: no LEDs light).' : '.')); }
   catch(e){ $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; }
 };
 $('ledOff').onclick = async () => { try{ await agFetch('/api/stop', 'POST'); toast('Both LEDs off.'); }catch(e){ $('ag-msg').className = 'msg bad'; $('ag-msg').textContent = e.message; } };
 $('bLight').onclick = () => { if(!ready()) return toast('Start the camera first.'); setDrawMode('light'); };
 $('bLightClear').onclick = () => { cfg().lightRoi = null; changed(); };
-// What was played, as LED events on the trial's clock: one event per stretch an output holds one nonzero level.
-function ledEvents(c, steps, starts, t0trial, tEnd){
-  const ev = [];
-  OUTS.forEach(o => {
-    let cur = null;
-    steps.forEach((s, i) => {
-      const a = t0trial + starts[i], b = a + s.dur, v = s[o];
-      if(cur && cur.peak === v && Math.abs(cur.t + cur.dur - a) < 1e-6){ cur.dur += s.dur; return; }
-      if(cur) ev.push(cur);
-      cur = v ? {t: a, output: ledName(c, o), channel: o, peak: v, dur: s.dur} : null;
-    });
-    if(cur) ev.push(cur);
-  });
-  return ev.filter(e => e.t < tEnd).map(e => Object.assign(e, {dur: +Math.min(e.dur, tEnd - e.t).toFixed(4), t: +e.t.toFixed(4)}))
-    .sort((x, y) => x.t - y.t || x.channel.localeCompare(y.channel))
-    .map((e, k) => Object.assign(e, {seq: k + 1, label: `${e.output} ${C.fmtLevel(e.peak)}`, segs: [[0, e.dur, e.peak]], complete: true}));
-}
-function ledAt(events, t){
-  const on = events.filter(e => t >= e.t && t < e.t + e.dur).map(e => e.label);
-  return on.join(' + ') || 'off';
-}
+const ledAt = (conditions, t) => { const k = C.conditionAt(conditions, t); return !k || k === 'No stimulus' ? 'off' : k; };
 
 // Live trial: track every camera frame (up to the samples-per-second limit) until Stop or the trial length.
 async function runLive(){
@@ -1477,9 +1816,10 @@ async function runLive(){
   if(S.ui.led.run){
     try{
       const st = await agSync(3), probs = ledProblems(r.cfg);
-      if(probs.length) throw new Error('Fix the LED protocol first: ' + probs[0]);
+      if(probs.length) throw new Error('Fix the LED protocol first: ' + probs[0].msg);
       if(st.running) await agFetch('/api/stop', 'POST');                 // e.g. a test still playing
-      ag = {steps: flatSteps(r.cfg), started: false, done: false, err: '', reply: null, poll: null, toTrial: () => 0, planned: []};
+      const seed = 1 + Math.floor(Math.random() * 2 ** 30);            // shuffle order for this trial, logged with it
+      ag = {seed, seq: C.ledSequence(r.cfg.led, seed), started: false, done: false, err: '', reply: null, poll: null, toTrial: () => 0, planned: []};
     }catch(e){ $('runMsg').className = 'msg bad'; $('runMsg').textContent = e.message; renderLedPanel(); return; }
   }
   const prevCurrent = S.current;
@@ -1503,10 +1843,11 @@ async function runLive(){
         if(ag){
           const epoch0 = performance.timeOrigin + start;            // trial time 0 on this page's clock
           ag.toTrial = tHelper => (tHelper * 1000 - AG.offset - epoch0) / 1000;
-          agFetch('/api/run', 'POST', {steps: ag.steps, rate: 1000}).then(rep => {
+          agFetch('/api/run', 'POST', {steps: ledWireSeq(ag.seq), rate: LED_RATE}).then(rep => {
             if(!rep.ok){ ag.err = 'The LED helper refused the protocol: ' + rep.message; return; }
             ag.reply = rep; ag.started = true;
-            ag.planned = ledEvents(c, ag.steps, rep.starts, ag.toTrial(rep.t_start), Infinity);
+            const t0 = ag.toTrial(rep.t_start), end = t0 + rep.duration;      // conditions only (fast); the full log is made at the end
+            ag.planned = C.ledPlayed(ag.seq.map(s => Object.assign({}, s, {ao0: C.ledFn('off'), ao1: C.ledFn('off'), label: C.ledConditionName(s, ledNames(c))})), rep.starts, t0, end, rep.rate, ledNames(c)).conditions;
           }).catch(e => { ag.err = 'Couldn’t start the LED protocol: ' + e.message; });
           ag.poll = setInterval(async () => {
             try{ const st = await agFetch('/api/status'); ag.pollErr = '';
@@ -1559,12 +1900,12 @@ async function runLive(){
   r.result.videoName = videoFile; r.videoName = videoFile; r.duration = out.tEnd;
   let nEv = 0;
   if(ag && ag.started){
-    const ev = ledEvents(c, ag.steps, ag.reply.starts, ag.toTrial(ag.reply.t_start), out.tEnd);
+    const played = C.ledPlayed(ag.seq, ag.reply.starts, ag.toTrial(ag.reply.t_start), out.tEnd, ag.reply.rate, ledNames(c)), ev = played.events;
     nEv = ev.length;
     const st = AG.status || {};
     r.result.stim = {source: st.simulated ? 'LED helper in simulated mode' : `LED helper on ${st.device || 'the DAQ'}${st.product ? ' (' + st.product + ')' : ''}`, simulated: !!st.simulated,
-      protocol: clone(c.led), startedAt: +ag.toTrial(ag.reply.t_start).toFixed(4), plannedS: ag.reply.duration, rate: ag.reply.rate,
-      offsetMs: Math.round(AG.offset * 10) / 10, rttMs: AG.rtt == null ? null : Math.round(AG.rtt * 10) / 10, started: true, error: ag.err || ag.pollErr || '', events: ev};
+      protocol: clone(c.led), seed: ag.seed, order: ag.seq.map(s => s.index + 1), startedAt: +ag.toTrial(ag.reply.t_start).toFixed(4), plannedS: ag.reply.duration, rate: ag.reply.rate,
+      offsetMs: Math.round(AG.offset * 10) / 10, rttMs: AG.rtt == null ? null : Math.round(AG.rtt * 10) / 10, started: true, error: ag.err || ag.pollErr || '', events: ev, conditions: played.conditions, onsets: played.onsets};
   }
   changed();
   const slow = achievedHz < 0.9 * Math.min(hz, camFps);
@@ -1572,7 +1913,7 @@ async function runLive(){
   $('runMsg').textContent = `Trial done: ${fmt(out.tEnd)}, ${sess.res.t.length} samples at ${achievedHz.toFixed(1)}/s (camera ${camFps.toFixed(1)} fps).`
     + (slow ? ' Tracking did not keep up with the camera: lower the processing size or the samples per second.' : '')
     + (videoFile ? ` Video saved as ${videoFile}.` : c.trk.saveVideo ? ' This browser could not record the video.' : '')
-    + (ag ? ` LED protocol: ${nEv} LED change${nEv === 1 ? '' : 's'}${ag.reply && out.tEnd < ag.toTrial(ag.reply.t_start) + ag.reply.duration - 0.05 ? ', stopped early with the trial' : ''}` + (ag.err ? ` · ⚠ ${ag.err}` : '') + '.' : '');
+    + (ag ? ` LED protocol: ${nEv} LED segment${nEv === 1 ? '' : 's'} played${ag.reply && out.tEnd < ag.toTrial(ag.reply.t_start) + ag.reply.duration - 0.05 ? ', stopped early with the trial' : ''}` + (ag.err ? ` · ⚠ ${ag.err}` : '') + '.' : '');
   if(ag && ag.err) $('runMsg').className = 'msg warn';
 }
 $('bRun').onclick = () => mode() === 'camera' ? runLive() : runFile();
@@ -1590,7 +1931,7 @@ function recMetrics(r){
   let light = null;
   const st = r.result.stim;
   if(st && st.events){
-    const T1 = r.result.diag.t1, intervals = C.lightConditions(st.events, T1), keys = [];
+    const T1 = r.result.diag.t1, intervals = st.conditions || C.lightConditions(st.events, T1), keys = [];   // older trials: from the events
     intervals.forEach(iv => { if(!keys.includes(iv.key)) keys.push(iv.key); });
     keys.sort((a, b) => (a === 'No stimulus') - (b === 'No stimulus') || a.localeCompare(b, undefined, {numeric: true}));
     const rows = keys.map(key => {
@@ -1602,7 +1943,7 @@ function recMetrics(r){
     let check = null;
     const R = r.result;
     if(R.light){
-      const L = C.lightChanges(R.t, R.light, 12), on = st.events.filter(e => e.segs && e.segs.length).map(e => e.t + e.segs[0][0]);
+      const L = C.lightChanges(R.t, R.light, 12), on = st.onsets || st.events.filter(e => e.segs && e.segs.length).map(e => e.t + e.segs[0][0]);
       if(!L) check = {msg: 'Light check: the box’s brightness barely changed, so no LED changes were seen there. Put the box over an LED the camera can see clearly.'};
       else {
         const lat = C.matchLatency(on, L.onsets, 1).sort((a, b) => a - b);
@@ -1660,6 +2001,7 @@ function renderSettings(){
   $('arenaShape').value = c.arena ? c.arena.type : $('arenaShape').value;
   $('a-w').value = c.arenaWmm ?? ''; $('a-h').value = c.arenaHmm ?? ''; $('a-edge').value = c.edgeMm ?? '';
   $('a-edge').disabled = !scaleOf(r);
+  renderSel();
   const zl = $('zones'); zl.innerHTML = '';
   c.zones.forEach((z, i) => {
     const d = document.createElement('div'); d.className = 'zone';
@@ -1712,14 +2054,15 @@ function renderLed(r, M){
   const rows = L.rows.map(row => { const b = row.pooled;
     return `<tr><td>${esc(row.key)}</td><td class="num">${num(row.span, 1)}</td><td class="num">${num(b.tracked, 1)}</td><td class="num">${num(b.distance, 0)}</td><td class="num">${num(b.meanSpeed, 1)}</td><td class="num">${pct(b.fracMoving)}</td>`
       + b.zones.map(z => `<td class="num">${pct(z.frac)} <span class="help">(${z.visits})</span></td>`).join('') + '</tr>'; }).join('');
-  let note = `LED protocol played by the ${esc(st.source)}: ${n} LED change${n === 1 ? '' : 's'}, starting ${num(st.startedAt, 2)} s into the trial.`
-    + ` Step times come from the DAQ's own clock; the start is converted to trial time with a ${Math.round(st.offsetMs)} ms clock correction (checked to ±${Math.round((st.rttMs || 0) / 2)} ms).`
+  let note = `LED protocol played by the ${esc(st.source)}: ${st.conditions ? `${n} LED segment${n === 1 ? '' : 's'}` : `${n} LED change${n === 1 ? '' : 's'}`}, starting ${num(st.startedAt, 2)} s into the trial`
+    + (st.protocol && st.protocol.shuffle && st.order ? `, segments in the order ${st.order.join(', ')}.` : '.')
+    + ` Segment times come from the DAQ's own clock; the start is converted to trial time with a ${Math.round(st.offsetMs)} ms clock correction (checked to ±${Math.round((st.rttMs || 0) / 2)} ms).`
     + (st.simulated ? ' <b>No LEDs were lit (simulated).</b>' : '');
   if(L.check) note += ' ' + (L.check.msg ? esc(L.check.msg) : `<b>Light check:</b> the camera saw the light come on ${Math.round(L.check.median * 1000)} ms after the DAQ turned it on (median of ${L.check.n} of ${L.check.of}; range ${Math.round(L.check.min * 1000)} to ${Math.round(L.check.max * 1000)} ms).`);
   if(st.error) note += ` <span class="msg warn">⚠ ${esc(st.error)}</span>`;
   el.innerHTML = `<h3>By LED condition · all bees pooled</h3><p class="help">${note}</p>`
     + `<div class="tbl-wrap"><table><thead><tr><th>LED</th><th class="num">Time s</th><th class="num" title="Seconds tracked, added up over all bees">Bee-seconds</th><th class="num">Dist ${u}</th><th class="num">Speed ${u}/s</th><th class="num">Moving</th>${zh}</tr></thead><tbody>${rows}</tbody></table></div>`
-    + `<p class="help">Conditions are named by LED and level; when both LEDs are on, they are joined with +.</p>`;
+    + `<p class="help">${st.conditions ? 'Conditions are the protocol’s segment labels; a segment without one is named by what the LEDs do.' : 'Conditions are named by LED and level; when both LEDs are on, they are joined with +.'}</p>`;
 }
 function renderTraj(r, M){
   const c = r.cfg, a = c.arena; if(!a){ $('traj').innerHTML = ''; return; }
@@ -1768,6 +2111,8 @@ function draw(){
     const [lx, ly] = v2c(z.shape.x, z.shape.y, R); octx.fillText(z.name, lx + 4, ly + 14);
   });
   octx.setLineDash([]);
+  const picked = selShape(c);
+  if(picked){ pathShape(octx, picked.shape, R); octx.strokeStyle = '#ffffff'; octx.lineWidth = 5; octx.globalAlpha = 0.6; octx.stroke(); octx.globalAlpha = 1; }
   if(c.lightRoi){ pathShape(octx, c.lightRoi, R); octx.strokeStyle = '#ffffff'; octx.setLineDash([3, 3]); octx.lineWidth = 1.5; octx.stroke(); octx.setLineDash([]);
     const [lx, ly] = v2c(c.lightRoi.x, c.lightRoi.y + c.lightRoi.h, R); octx.fillStyle = '#ffffff'; octx.font = '600 11px ' + getComputedStyle(document.body).fontFamily; octx.fillText('Light check', lx, ly + 13); }
   // tracks
@@ -1980,9 +2325,10 @@ function ledCSV(){
   return toCSV(rows);
 }
 function stimCSV(){
-  const rows = [['experiment','recording','group','seq','led','channel','on_s','off_s','volts','seconds','clock_offset_ms']];
+  const rows = [['experiment','recording','group','seq','led','channel','on_s','off_s','volts','seconds','clock_offset_ms','segment','repeat','condition','function','min_volts']];
   S.recs.forEach(r => { const st = r.result && r.result.stim; if(!st) return;
-    st.events.forEach(e => rows.push([S.session.experiment, r.label, r.group, e.seq, e.output, e.channel || '', e.t.toFixed(4), (e.t + e.dur).toFixed(4), e.peak, e.dur, st.offsetMs])); });
+    st.events.forEach(e => rows.push([S.session.experiment, r.label, r.group, e.seq, e.output, e.channel || '', e.t.toFixed(4), (e.t + e.dur).toFixed(4), e.peak, e.dur, st.offsetMs,
+      e.segment ?? '', e.repeat ?? '', e.label ?? '', e.fn ?? '', e.low ?? ''])); });
   return toCSV(rows);
 }
 // A PER Scorer project: each tracked bee becomes a PER Scorer bee; moving and zone bouts become start/stop behaviors.
@@ -2043,9 +2389,11 @@ $('newProj').onclick = () => confirmInline($('newProjWrap'), 'Clear all recordin
 document.addEventListener('keydown', e => {
   const tag = (e.target.tagName || '').toLowerCase();
   if(e.key === 'Escape' && drawMode){ setDrawMode(null); return; }
+  if(e.key === 'Escape' && sel){ pick(null); return; }
   if(['input','select','textarea'].includes(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
   if(e.metaKey || e.ctrlKey || e.altKey) return;
-  if(e.key === ' '){ e.preventDefault(); togglePlay(); }
+  if((e.key === 'Delete' || e.key === 'Backspace') && sel){ e.preventDefault(); removeSelected(); }
+  else if(e.key === ' '){ e.preventDefault(); togglePlay(); }
   else if(e.key === 'ArrowLeft'){ e.preventDefault(); nudge(e.shiftKey ? -5 : -1); }
   else if(e.key === 'ArrowRight'){ e.preventDefault(); nudge(e.shiftKey ? 5 : 1); }
   else if(e.key === ','){ nudge(-fpsStep()); }

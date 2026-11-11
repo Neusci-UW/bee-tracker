@@ -159,3 +159,55 @@ test('lightChanges finds when a light in view turns on and off, and latency is m
   assert.equal(lat.length, 2); assert.ok(lat.every(d => Math.abs(d - 0.1) < 0.04));
   assert.equal(C.lightChanges(t, t.map(() => 50), 12), null);   // no light change in view
 });
+
+test('LED formulas: grammar, and clear errors instead of running code', () => {
+  const f = C.parseFormula('2.5 + 2*sin(2*pi*t) - -1^2 + (t<1)*3 + clamp(t, 0, 1) + mod(-1, 3) + round(0.5) + d');
+  assert.ok(Math.abs(f(0.25, 10) - (2.5 + 2 + 1 + 3 + 0.25 + 2 + 1 + 10)) < 1e-12);
+  assert.equal(C.parseFormula('2^3^2')(0, 1), 512);                    // right to left, like maths
+  for(const [src, msg] of [['', /empty/], ['2+', /ends too early/], ['alert(1)', /doesn’t know/], ['sin(1, 2)', /takes 1 value/],
+    ['t; 1', /character/], ['(t', /missing “\)”/], ['t t', /extra/], ['constructor', /doesn’t know/]])
+    assert.throws(() => C.parseFormula(src), msg);
+});
+
+test('LED functions: levels, problems and names', () => {
+  const at = (f, t, d) => C.ledEval(f)(t, d ?? 1);
+  assert.equal(at(C.ledFn('ramp', {from: 1, to: 3}), 0.5), 2);
+  assert.equal(at(C.ledFn('pulses', {freq: 10, duty: 30, on: 3, off: 0.5}), 0.02), 3);
+  assert.equal(at(C.ledFn('pulses', {freq: 10, duty: 30, on: 3, off: 0.5}), 0.03), 0.5);
+  assert.equal(at(C.ledFn('pulse', {delay: 0.2, width: 0.1, v: 2}), 0.3), 0);      // edge on a sample time: off, as in the helper
+  const r = C.ledFn('random', {min: 1, max: 3, hold: 0.25, seed: 7});
+  assert.equal(at(r, 0.1), at(r, 0.2)); assert.notEqual(at(r, 0.1), at(r, 0.3));
+  assert.deepEqual(C.ledFnProblems(C.ledFn('pulses', {duty: 100})), ['The duty cycle must be between 0 and 100%.']);
+  assert.match(C.ledFnProblems(C.ledFn('formula', {expr: 'sin('}))[0], /ends too early/);
+  const rg = C.ledRange(C.ledFn('sine', {freq: 1, mid: 2, amp: 1}), 1, 1000);
+  assert.ok(Math.abs(rg.lo - 1) < 1e-4 && Math.abs(rg.hi - 3) < 1e-4);
+  assert.ok(isNaN(C.ledRange(C.ledFn('formula', {expr: 'sqrt(-1)'}), 1, 1000).lo));
+  const names = {ao0: 'Blue', ao1: 'Green'};
+  assert.equal(C.ledConditionName({ao0: C.ledFn('const', {v: 2}), ao1: C.ledFn('off')}, names), 'Blue 2 V');
+  assert.equal(C.ledConditionName({ao0: C.ledFn('off'), ao1: C.ledFn('const', {v: 0})}, names), 'No stimulus');
+  assert.equal(C.ledConditionName({label: ' Flicker ', ao0: C.ledFn('pulses'), ao1: C.ledFn('off')}, names), 'Flicker');
+});
+
+test('LED sequence repeats and shuffles each repeat the same way for the same seed', () => {
+  const led = {repeats: 3, shuffle: true, segs: [0, 1, 2, 3].map(k => ({label: 'S' + k, dur: 1}))};
+  const a = C.ledSequence(led, 99).map(s => s.index), b = C.ledSequence(led, 99).map(s => s.index);
+  assert.deepEqual(a, b);
+  for(let r = 0; r < 3; r++) assert.deepEqual(a.slice(r * 4, r * 4 + 4).sort(), [0, 1, 2, 3]);
+  assert.notDeepEqual(a, C.ledSequence(led, 100).map(s => s.index));
+  assert.deepEqual(C.ledSequence(Object.assign({}, led, {shuffle: false}), 99).map(s => s.index), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]);
+});
+
+test('ledPlayed logs conditions, events and onsets on the trial clock', () => {
+  const off = C.ledFn('off'), names = {ao0: 'Blue', ao1: 'Green'};
+  const seq = C.ledSequence({repeats: 1, segs: [
+    {label: '', dur: 1, ao0: off, ao1: off},
+    {label: 'Flicker', dur: 1, ao0: C.ledFn('pulses', {freq: 4, duty: 50, on: 2, off: 0}), ao1: off},
+    {label: '', dur: 1, ao0: C.ledFn('const', {v: 1}), ao1: C.ledFn('ramp', {from: 0, to: 2})}]}, 1);
+  const p = C.ledPlayed(seq, [0, 1, 2], 0.5, 3.2, 1000, names);
+  assert.deepEqual(p.conditions.map(c => [c.t0, c.t1, c.key]),
+    [[0, 1.5, 'No stimulus'], [1.5, 2.5, 'Flicker'], [2.5, 3.2, 'Blue 1 V + Green ramp 0–2 V']]);
+  assert.deepEqual(p.events.map(e => [e.output, e.t, e.dur, e.label, e.peak]),
+    [['Blue', 1.5, 1, 'Flicker', 2], ['Blue', 2.5, 0.7, 'Blue 1 V + Green ramp 0–2 V', 1], ['Green', 2.5, 0.7, 'Blue 1 V + Green ramp 0–2 V', 1.398]]);
+  assert.deepEqual(p.onsets, [1.5, 1.75, 2, 2.25, 2.5, 2.501]);             // 4 pulses, Blue on again, Green leaves 0 V one sample in
+  assert.equal(C.conditionAt(p.conditions, 1.6), 'Flicker');
+});

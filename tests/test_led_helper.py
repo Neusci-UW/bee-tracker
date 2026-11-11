@@ -3,6 +3,8 @@
 No DAQ is needed: the NI path is checked against a stand-in `nidaqmx` that records every call.
 """
 import json
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -213,6 +215,13 @@ def test_bad_protocol_and_bad_json_get_reasons(helper):
     assert st == 400 and "JSON" in body["message"]
 
 
+def test_page_is_served_only_when_given(helper):
+    assert call(helper, "/", code=None, origin=None)[0] == 404
+    helper.page = b"<!doctype html><title>Bee Tracker</title>"
+    with urllib.request.urlopen(helper.url + "/", timeout=5) as r:
+        assert r.status == 200 and r.headers["Content-Type"].startswith("text/html") and r.read() == helper.page
+
+
 def test_too_many_wrong_codes_lock_it(helper):
     for _ in range(L.MAX_BAD_CODES):
         call(helper, "/api/status", code="999999")
@@ -226,3 +235,68 @@ def test_main_refuses_bad_options_and_reports_a_missing_package(monkeypatch, cap
     monkeypatch.setitem(sys.modules, "nidaqmx", None)        # import fails
     assert L.main(["--port", "0"]) == 2
     assert "pip install nidaqmx" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- functions of time
+def fn_step(dur, ao0=None, ao1=None):
+    return {"dur": dur, "ao0": ao0, "ao1": ao1}
+
+
+def test_each_function_makes_the_expected_levels():
+    steps = [fn_step(1, {"fn": "ramp", "from": 0, "to": 4}),
+             fn_step(1, {"fn": "sine", "freq": 1, "mid": 2, "amp": 1, "phase": 90}),
+             fn_step(1, {"fn": "pulses", "freq": 10, "duty": 30, "on": 3, "off": 0.5}),
+             fn_step(1, {"fn": "pulse", "delay": 0.2, "width": 0.1, "v": 2}, {"fn": "exp", "from": 4, "to": 0, "tau": 0.5}),
+             fn_step(1, {"fn": "random", "min": 1, "max": 3, "hold": 0.25, "seed": 7}),
+             fn_step(1, {"fn": "formula", "expr": "1 + (t >= 0.5) * 2"}, 1.5)]
+    wave, starts = L.build_wave(steps, 100, 5)
+    assert starts == [0, 1, 2, 3, 4, 5]
+    assert wave[0, 50] == pytest.approx(2) and wave[0, 99] == pytest.approx(3.96)          # ramp
+    assert wave[0, 100] == pytest.approx(3) and wave[0, 150] == pytest.approx(1)           # sine, 90° in
+    assert list(wave[0, 200:210]) == [3, 3, 3, .5, .5, .5, .5, .5, .5, .5]                  # 30% of 10 Hz
+    assert list(wave[0, 319:331]) == [0] + [2] * 10 + [0]                                   # 0.2-0.3 s pulse
+    assert wave[1, 300] == 4 and wave[1, 350] == pytest.approx(4 * np.exp(-1))
+    r = wave[0, 400:500]
+    assert len(set(r[:25])) == 1 and len(set(r)) == 4 and r.min() >= 1 and r.max() <= 3     # 4 held levels
+    assert wave[0, 549] == 1 and wave[0, 550] == 3 and wave[1, 520] == 1.5 and wave[:, -1].tolist() == [0, 0]
+
+
+@pytest.mark.parametrize("step, msg", [
+    (fn_step(1, {"fn": "sine", "freq": 1, "mid": 4, "amp": 2, "phase": 0}), "outside"),
+    (fn_step(1, {"fn": "formula", "expr": "sqrt(-1)"}), "no number"),
+    (fn_step(1, {"fn": "formula", "expr": "sin(t"}), "missing"),
+    (fn_step(1, {"fn": "formula", "expr": "__import__(1)"}), "doesn’t know"),
+    (fn_step(1, {"fn": "pulses", "freq": 10, "duty": 100, "on": 1, "off": 0}), "duty"),
+    (fn_step(1, {"fn": "ramp", "from": 0}), "must be a number"),
+    (fn_step(1, {"fn": "laser"}), "unknown function"),
+])
+def test_bad_functions_are_refused_with_a_reason(step, msg):
+    with pytest.raises(L.ProtocolError, match=msg):
+        L.build_wave([step], 1000, 5)
+
+
+def test_formula_grammar():
+    f = L.parse_formula("2.5 + 2*sin(2*pi*t) - -1^2 + (t<1)*3 + clamp(t, 0, 1) + mod(-1, 3) + round(0.5) + d")
+    assert f(np.array([0.25]), 10)[0] == pytest.approx(2.5 + 2 + 1 + 3 + 0.25 + 2 + 1 + 10)
+
+
+NODE = shutil.which("node")
+
+
+@pytest.mark.skipif(NODE is None, reason="needs Node to run src/core.js")
+def test_page_and_helper_make_the_same_wave():
+    """The page's preview and LED log (src/core.js) must match what the helper plays."""
+    steps = [fn_step(0.7, {"fn": "ramp", "from": 0.5, "to": 4}, {"fn": "sine", "freq": 3.3, "mid": 2, "amp": 1.5, "phase": 30}),
+             fn_step(1.2345, {"fn": "pulses", "freq": 13, "duty": 37, "on": 3, "off": 0.25}, {"fn": "exp", "from": 1, "to": 4, "tau": 0.3}),
+             fn_step(0.5, {"fn": "pulse", "delay": 0.1, "width": 0.123, "v": 2}, {"fn": "random", "min": 0, "max": 5, "hold": 0.017, "seed": 123456}),
+             fn_step(0.9, {"fn": "formula", "expr": "2 + sin(2*pi*5*t)^3 - floor(t*4)/4 + max(t, 0.3) * (t > d/2)"}, {"fn": "const", "v": 1.25})]
+    rate = 1000
+    wave, _ = L.build_wave(steps, rate, 5)
+    js = """const C = require(process.argv[1]); const steps = JSON.parse(process.argv[2]), rate = +process.argv[3], out = [[], []];
+      steps.forEach(s => ['ao0', 'ao1'].forEach((o, ch) => { const g = C.ledEval(s[o]), n = C.ledSamples(s.dur, rate);
+        for(let j = 0; j < n; j++) out[ch].push(g(j / rate, s.dur)); })); console.log(JSON.stringify(out));"""
+    core = str(Path(__file__).resolve().parent.parent / "src" / "core.js")
+    res = subprocess.run([NODE, "-e", js, core, json.dumps(steps), str(rate)], capture_output=True, text=True, check=True)
+    page = np.array(json.loads(res.stdout))
+    assert page.shape[1] == wave.shape[1] - 1
+    assert np.max(np.abs(page - wave[:, :-1])) < 1e-9
