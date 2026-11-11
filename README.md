@@ -4,6 +4,14 @@ Track free-moving bees in an arena from a video recording. You draw the arena, a
 
 Like PER Scorer, it is a single self-contained page (`bee-tracker.html`). It runs in the browser, uploads nothing, and needs no install. It reuses PER Scorer's look, video loading, frame stepping, file saving and rank tests.
 
+## Guides
+
+| Page | What it is |
+|---|---|
+| [`index.html`](index.html) | Start page linking the guides and the tracker |
+| [`bee-walkthrough.html`](bee-walkthrough.html) | A narrated 3-minute video of one live trial, with captions and chapters |
+| [`Bee-Tracker-Student-Tutorial.pdf`](Bee-Tracker-Student-Tutorial.pdf) | Student tutorial: setup, step-by-step trials, detection, LEDs, results, practice questions and a reference card. Source in `tutorial/`. |
+
 ## Use
 
 1. Open `bee-tracker.html` in Chrome or Edge, choose **Saved video**, then open a video (MP4/H.264 is safest).
@@ -117,3 +125,18 @@ The end-to-end tests need `pip install playwright scipy numpy`, Google Chrome, a
 - Bees on the arena wall seen from above are foreshortened. The edge band counts them as near the wall, but distance along the wall is underestimated.
 - Results and settings are kept in browser storage. Save the project file, since long multi-bee recordings may not fit in storage.
 - Links to videos on other sites only work if the site allows cross-origin reading (CORS). Otherwise, download the file and open it.
+
+## Re-recording the walkthrough
+
+The walkthrough is recorded from the real page, so re-record it after the page changes. `tools/walkthrough.py` speaks each line in `SCRIPT` with [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) (a free text-to-speech model that runs offline, the same voice as PER Scorer's walkthrough), drives the page in Chrome with a simulated camera of three bees (`tools/simcam.js`) and a simulated LED helper, and writes `walkthrough/bee-tracker-walkthrough.mp4` with the voice-over, its captions and chapters, and the tutorial's screenshots in `tutorial/img/`. Setup steps are at the top of the script; then:
+
+```
+.venv/bin/python tools/walkthrough.py --chrome
+```
+
+## Rebuilding the tutorial PDF
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+  --print-to-pdf=Bee-Tracker-Student-Tutorial.pdf "file://$PWD/tutorial/bee-tracker-tutorial.html"
+```

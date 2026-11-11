@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bee Tracker Walkthrough</title>
+<meta name="description" content="A narrated video of Bee Tracker: setting up a session, drawing the arena and zones, setting up detection, running a trial with LEDs, and reading and saving the results.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+<style>
+/* Same look as PER Scorer's walkthrough. The video is recorded from the real page by tools/walkthrough.py. */
+:root{
+  --bg:#eef1f3; --panel:#ffffff; --ink:#18212a; --muted:#5d6b78; --line:#d6dde2; --soft:#e6ebee;
+  --accent:#b06e00; --accent-ink:#fff; --accent-soft:#fbefd9; --player:#11161b; --player-ink:#e8edf1;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101418; --panel:#182027; --ink:#e4e9ed; --muted:#93a1ad; --line:#2a343d; --soft:#212a32;
+  --accent:#f0a92e; --accent-ink:#1a1206; --accent-soft:#3a2c12; --player:#0a0d10; --player-ink:#e8edf1; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101418; --panel:#182027; --ink:#e4e9ed; --muted:#93a1ad; --line:#2a343d; --soft:#212a32;
+  --accent:#f0a92e; --accent-ink:#1a1206; --accent-soft:#3a2c12; --player:#0a0d10; --player-ink:#e8edf1; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0;padding:24px 16px 48px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-family:var(--serif);font-size:28px;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted);max-width:70ch}
+header a{color:var(--accent);font-weight:600}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start}
+@media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
+.player{background:var(--player);color:var(--player-ink);border-radius:12px;overflow:hidden;min-width:0}
+video{display:block;width:100%;height:auto;aspect-ratio:1280/800;background:#000}
+video::cue{font-family:var(--sans);font-size:18px;background:rgba(0,0,0,.78)}
+.caption{min-height:74px;padding:12px 20px;font-size:17px;line-height:1.45;display:flex;align-items:center;justify-content:center;text-align:center;background:#000;color:#fff}
+.caption[hidden]{display:none!important}
+.caption span{max-width:60ch}
+.bar{display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap}
+.bar button{font:inherit;font-size:13px;color:var(--player-ink);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:6px 10px;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1a1206}
+.chap-now{font-size:13px;color:#b9c4cd;flex:1;min-width:0}
+button:focus-visible,a:focus-visible,video:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 6px;font-weight:600}
+.chap{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;text-align:left;background:none;border:1px solid transparent;border-radius:8px;padding:7px 8px;font:inherit;color:inherit;cursor:pointer}
+.chap:hover{background:var(--soft)}
+.chap.on{background:var(--accent-soft);border-color:var(--accent)}
+.chap .n,.chap .t{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.note h3{margin:0 0 4px;font-size:15px}
+.note p{margin:0;color:var(--muted);font-size:14px}
+.note a{color:var(--accent);font-weight:600}
+kbd{font-family:var(--mono);font-size:12px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bee Tracker walkthrough</h1>
+    <p>Watch one trial from start to finish: session details, the arena and a food zone, automatic detection, an LED protocol, a live trial with three bees, then the results, charts and saving. About 3 minutes. <a href="index.html">All Bee Tracker guides</a></p>
+  </header>
+
+  <div class="layout">
+    <div class="player">
+      <video id="vid" controls preload="metadata" playsinline>
+        <source src="walkthrough/bee-tracker-walkthrough.mp4" type="video/mp4">
+        <track id="capTrack" kind="captions" src="walkthrough/captions.vtt" srclang="en" label="English">
+        <track id="chapTrack" kind="chapters" src="walkthrough/chapters.vtt" srclang="en" default>
+      </video>
+      <div class="caption" id="caption" aria-live="polite"><span id="capText">Press play to start.</span></div>
+      <div class="bar">
+        <button id="ccBtn" aria-pressed="true" title="Show the narration as text under the video">Captions</button>
+        <button id="voiceBtn" aria-pressed="true" title="Voice-over on or off">Narrate</button>
+        <span class="chap-now" id="chapNow"></span>
+      </div>
+    </div>
+
+    <aside aria-label="Chapters">
+      <h2>Chapters</h2>
+      <div id="chapters"></div>
+    </aside>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>Controls</h3><p><kbd>Space</kbd> plays and pauses, <kbd>←</kbd> <kbd>→</kbd> jump 5 seconds. Click a chapter to jump to it. Narrate turns the voice-over on or off; the captions stay.</p></div>
+    <div class="note"><h3>Then try it yourself</h3><p>Open <a href="bee-tracker.html" target="_blank" rel="noopener">Bee Tracker</a> with a saved video, or read the <a href="Bee-Tracker-Student-Tutorial.pdf">student tutorial</a> for every step in detail.</p></div>
+    <div class="note"><h3>About the bees</h3><p>The camera in this demo is simulated, so every step is easy to see. Real arenas need even light and a fixed camera; the tutorial explains how to set one up.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id), vid = $('vid'), cap = $('capTrack').track, chap = $('chapTrack').track;
+const fmt = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+cap.mode = 'hidden'; chap.mode = 'hidden';
+// Captions as text under the video (larger, never covering the screen being shown).
+function showCaption(){ const c = cap.activeCues && cap.activeCues[0]; if(c) $('capText').textContent = c.text; }
+cap.addEventListener('cuechange', showCaption);
+$('ccBtn').onclick = () => { const on = $('ccBtn').getAttribute('aria-pressed') !== 'true'; $('ccBtn').setAttribute('aria-pressed', on); $('caption').hidden = !on; };
+$('voiceBtn').onclick = () => { vid.muted = !vid.muted; $('voiceBtn').setAttribute('aria-pressed', !vid.muted); };
+vid.addEventListener('volumechange', () => $('voiceBtn').setAttribute('aria-pressed', !vid.muted));
+// Chapters list from the chapters track.
+function buildChapters(){
+  const cues = [...(chap.cues || [])]; if(!cues.length) return;
+  $('chapters').innerHTML = '';
+  cues.forEach((c, i) => {
+    const b = document.createElement('button'); b.className = 'chap';
+    b.innerHTML = `<span class="n">${i + 1}</span><span>${c.text}</span><span class="t">${fmt(c.startTime)}</span>`;
+    b.onclick = () => { vid.currentTime = c.startTime + 0.01; vid.play(); };
+    $('chapters').appendChild(b);
+  });
+  markChapter();
+}
+function markChapter(){
+  const cues = [...(chap.cues || [])], t = vid.currentTime;
+  let k = cues.findIndex(c => t >= c.startTime && t < c.endTime); if(k < 0) k = 0;
+  [...$('chapters').children].forEach((b, i) => b.classList.toggle('on', i === k));
+  if(cues[k]) $('chapNow').textContent = `Chapter ${k + 1} of ${cues.length}: ${cues[k].text}`;
+}
+$('chapTrack').addEventListener('load', buildChapters); if(chap.cues && chap.cues.length) buildChapters();
+vid.addEventListener('timeupdate', markChapter);
+document.addEventListener('keydown', e => {
+  if(e.target !== document.body || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === ' '){ e.preventDefault(); vid.paused ? vid.play() : vid.pause(); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); vid.currentTime = Math.max(0, vid.currentTime - 5); }
+  else if(e.key === 'ArrowRight'){ e.preventDefault(); vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 5); }
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tracking Bees with Bee Tracker: A Student Tutorial</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+/* Print layout shared with PER Scorer's tutorial. Print to PDF: see the README. */
+@page{size:Letter;margin:0.7in 0.75in 0.75in}
+@page:first{margin:0}
+:root{--ink:#18212a;--muted:#5d6b78;--line:#d9e0e5;--soft:#eef2f4;--accent:#b06e00;--accent-soft:#fbefd9;--good:#1f7a4d;--good-soft:#dcf1e5;--bad:#b3362c;--bad-soft:#f8e1de}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:10pt;line-height:1.45;color:var(--ink)}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;font-weight:600;line-height:1.2;margin:0}
+h2{font-size:19pt;margin:0 0 10pt;break-after:avoid}
+h3{font-size:12.5pt;margin:16pt 0 5pt;break-after:avoid}
+p{margin:0 0 8pt}
+ul,ol{margin:0 0 8pt;padding-left:18pt}
+li{margin-bottom:3pt}
+.mono,code,kbd{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+kbd{font-size:8.5pt;font-weight:600;background:var(--soft);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4pt;white-space:nowrap}
+code{font-size:9pt;background:var(--soft);padding:0 3pt;border-radius:2px}
+.eyebrow{break-after:avoid;font-size:8pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:4pt}
+section{break-before:page}
+section.flow{break-before:auto;margin-top:22pt}
+figure{margin:8pt 0 12pt;break-inside:avoid}
+figure img{width:100%;display:block;border:1px solid var(--line);border-radius:5px}
+figcaption{font-size:8.5pt;color:var(--muted);margin-top:4pt}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16pt;align-items:start}
+.side{display:grid;grid-template-columns:2.3in 1fr;gap:16pt;align-items:start}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:7pt 10pt;margin:8pt 0 10pt;break-inside:avoid;border-radius:0 4px 4px 0}
+.note b:first-child{color:var(--accent)}
+.warn{border-left-color:var(--bad);background:var(--bad-soft)}
+.warn b:first-child{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:9.5pt;margin:4pt 0 10pt;break-inside:auto}
+th,td{text-align:left;vertical-align:top;padding:4pt 6pt;border-bottom:1px solid var(--line)}
+th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--soft)}
+tr{break-inside:avoid}
+.step{display:grid;grid-template-columns:24pt 1fr;gap:8pt;margin:12pt 0 6pt;break-after:avoid}
+.step .n{width:22pt;height:22pt;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center;font-size:10pt}
+.step h3{margin:2pt 0 0}
+.cover{height:11in;display:grid;grid-template-rows:auto 1fr auto;padding:0.9in 0.85in 0.7in;background:#fff;border-top:14pt solid var(--accent)}
+.cover .mark{display:flex;align-items:center;gap:10pt;font-weight:600;color:var(--muted);font-size:10pt}
+.cover h1{font-size:40pt;letter-spacing:-.01em;margin:1.3in 0 12pt;max-width:5.6in}
+.cover .lede{font-size:13pt;color:var(--muted);max-width:5in}
+.cover .box{display:grid;grid-template-columns:1fr 1fr;gap:20pt;align-self:end;margin-bottom:18pt}
+.cover .box h3{margin:0 0 5pt;font-size:11pt}
+.cover .box ul{font-size:10pt}
+.cover .foot{font-size:8.5pt;color:var(--muted);border-top:1px solid var(--line);padding-top:8pt}
+.toc{columns:2;column-gap:24pt;font-size:10pt;padding-left:16pt}
+.qa li{margin-bottom:8pt}
+.answers{font-size:9pt;color:var(--muted);border-top:1px dashed var(--line);padding-top:6pt;margin-top:10pt}
+.card{border:1.5px solid var(--ink);border-radius:8px;padding:14pt 16pt}
+.card table td:first-child{width:1.5in}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="mark">
+    <svg width="26" height="26" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="#b06e00"/><path d="M7 25c4-1 5-6 9-7s6 3 11-3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.2"/><circle cx="25" cy="12" r="3.4" fill="#fff"/></svg>
+    Bee Tracker · Student tutorial
+  </div>
+  <div>
+    <h1>Tracking free-moving bees in an arena</h1>
+    <p class="lede">A step-by-step guide to recording bees in an arena, live or from video, and turning their tracks into distances, speeds, time in zones and contact with other bees.</p>
+  </div>
+  <div>
+    <div class="box">
+      <div>
+        <h3>You will learn to</h3>
+        <ul>
+          <li>Set up a camera and arena that track well</li>
+          <li>Draw the arena, zones and an edge band</li>
+          <li>Set up detection and check it found every bee</li>
+          <li>Run live trials, with or without an LED protocol</li>
+          <li>Track a saved video</li>
+          <li>Read the results and charts, and export your data</li>
+        </ul>
+      </div>
+      <div>
+        <h3>You will need</h3>
+        <ul>
+          <li>A laptop or lab PC with Chrome or Edge</li>
+          <li>Bee Tracker: the desktop app (BeeTracker.exe) on the lab PC, or <code>bee-tracker.html</code></li>
+          <li>A camera on a stand above the arena, or a saved video (MP4 works best)</li>
+          <li>The arena's inner width in millimetres</li>
+          <li>About 30 minutes for a first run, after watching the 3-minute walkthrough</li>
+        </ul>
+      </div>
+    </div>
+    <ol class="toc">
+      <li>What Bee Tracker measures</li>
+      <li>Setting up the camera and arena</li>
+      <li>A tour of the screen</li>
+      <li>Running a live trial, step by step</li>
+      <li>Tracking a saved video</li>
+      <li>How detection works, and fixing it</li>
+      <li>LED protocols</li>
+      <li>Reading the results</li>
+      <li>Saving and exporting your data</li>
+      <li>Good practice and troubleshooting</li>
+      <li>Check your understanding</li>
+      <li>Quick reference card</li>
+    </ol>
+    <div class="foot">Screenshots show a simulated camera with three bees, a food zone and a short LED protocol, recorded by <code>tools/walkthrough.py</code>.</div>
+  </div>
+</div>
+
+<section>
+  <div class="eyebrow">Part 1</div>
+  <h2>What Bee Tracker measures</h2>
+  <p>Bee Tracker finds each bee's centre in every sample, follows each bee from sample to sample, and turns the tracks into measures of activity, place preference and contact between bees. It runs in the browser and uploads nothing.</p>
+  <table>
+    <tr><th style="width:1.45in">Column</th><th>What it means</th></tr>
+    <tr><td>Found</td><td>The share of samples in which the bee was detected. Below 80% the row is flagged: check detection.</td></tr>
+    <tr><td>Tracked s</td><td>Seconds of continuous track the other measures are based on. Gaps longer than 0.5 s are not counted.</td></tr>
+    <tr><td>Dist mm</td><td>Distance walked, from the smoothed track.</td></tr>
+    <tr><td>Speed mm/s, 95th</td><td>Mean walking speed over the tracked time, and the 95th percentile (a bee's fast walking speed).</td></tr>
+    <tr><td>Moving</td><td>The share of tracked time the bee moved faster than 3 mm/s (set under Results → Settings).</td></tr>
+    <tr><td>Zone columns</td><td>The share of tracked time inside each zone, with the number of visits in brackets.</td></tr>
+    <tr><td>Edge</td><td>Time inside the edge band you set: near the wall (thigmotaxis).</td></tr>
+    <tr><td>Nearest mm</td><td>Mean distance to the nearest other bee. Shown only with two or more bees.</td></tr>
+    <tr><td>Near bee</td><td>The share of time the bee was within 10 mm (centre to centre, about one bee length) of another bee. Shown only with two or more bees.</td></tr>
+    <tr><td>Encounters, Mean enc. s</td><td>How many separate times a bee was near another bee, and how long each lasted on average.</td></tr>
+    <tr><td>Merges, Reacq.</td><td>How often bees touched and showed as one blob, and how often a lost bee was picked up again. Both are warnings that per-bee identity may have swapped.</td></tr>
+  </table>
+  <div class="note"><b>Per bee or all bees?</b> When unmarked bees touch, Bee Tracker can't always tell which is which afterwards. The <b>All bees</b> row doesn't depend on identity and is always safe to use. Use per-bee rows only when each bee is alone in its arena, or the bees are paint-marked and never merged.</div>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 2</div>
+  <h2>Setting up the camera and arena</h2>
+  <p>The setup matters more than any setting. A clean recording tracks well with the defaults; a poor one can't be fixed afterwards.</p>
+  <ul>
+    <li><b>Fixed camera, looking straight down,</b> on a stand, not handheld. If the camera's own software allows it, turn off auto-exposure, auto white balance and autofocus.</li>
+    <li><b>Even, diffuse light</b> with no hard shadows. A shadow is a dark blob that moves with the bee.</li>
+    <li><b>A plain background that contrasts with the bees,</b> such as white paper or white acrylic under dark bees. Avoid glare off the lid.</li>
+    <li><b>Lid on the arena.</b> Bees on the walls or lid, or flying, give bad tracks.</li>
+    <li><b>Measure the arena's inner width</b> in millimetres. It sets the scale for every distance.</li>
+    <li><b>Keep settings the same</b> across anything you compare: camera size, samples per second and smoothing all change the distance measured.</li>
+  </ul>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 3</div>
+  <h2>A tour of the screen</h2>
+  <figure><img src="img/video.png" alt="Video panel with the arena and a food zone"><figcaption><b>Video.</b> Live camera or saved video. The orange outline is the arena, the dashed circle a zone, the dotted line the edge band. Under the video: the trial bar, then <i>Draw arena</i>, <i>Add zone</i>, <i>Show detection</i> and <i>Show tracks</i>.</figcaption></figure>
+  <div class="two">
+    <figure><img src="img/zones.png" alt="Setup tab: arena and zones"><figcaption><b>Setup tab.</b> The recording and its group, the number of bees, the arena's real size, the edge band, and the zones.</figcaption></figure>
+    <figure><img src="img/detect.png" alt="Detect tab after Set up detection"><figcaption><b>Detect tab.</b> <i>Set up detection</i> and what it chose. <i>Advanced</i> has every detection and tracking setting.</figcaption></figure>
+  </div>
+  <figure><img src="img/trialbar.png" alt="Trial bar during a trial"><figcaption><b>Trial bar.</b> Length, <i>Save video</i>, <i>LEDs</i>, and what's ready. During a trial, <i>Start trial</i> becomes a red <i>Stop</i>. For a saved video the bar has <i>Start here</i>, <i>End here</i> and <i>Track bees</i> instead.</figcaption></figure>
+  <div class="two">
+    <figure><img src="img/leds.png" alt="LEDs tab"><figcaption><b>LEDs tab</b> (live camera only). The connection to the LED helper, the protocol, its preview, and <i>Test LEDs (5 V)</i>.</figcaption></figure>
+    <figure><img src="img/data.png" alt="Data tab"><figcaption><b>Data tab.</b> CSV exports, the PER Scorer export, and saving or opening the project file. The <kbd>?</kbd> at the top right lists the keyboard shortcuts.</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Part 4</div>
+  <h2>Running a live trial, step by step</h2>
+  <div class="step"><div class="n">1</div><h3>Open Bee Tracker and fill in the session</h3></div>
+  <p>On the lab PC, start <b>BeeTracker.exe</b>: it opens the page in Chrome or Edge, already connected to the LEDs. Keep its small window open while you work. Elsewhere, open <code>bee-tracker.html</code>. At the top, type your initials, check the date, and name the experiment.</p>
+  <div class="step"><div class="n">2</div><h3>Start the camera</h3></div>
+  <p>Choose <b>Live camera</b>, pick the camera and size, and press <b>Start camera</b>. Allow the camera if the browser asks. If the message under the camera says the frame rate is lower than asked for, choose a smaller size.</p>
+  <div class="step"><div class="n">3</div><h3>Draw the arena and set the scale</h3></div>
+  <p>Choose round or rectangular, press <b>Draw arena</b>, and drag a box around the arena <i>floor</i>. On the <b>Setup</b> tab, type the arena's real width in mm (and height, if it isn't round or square), and set <b>Bees in arena</b>.</p>
+  <div class="step"><div class="n">4</div><h3>Add zones and an edge band (optional)</h3></div>
+  <p>Press <b>Add zone</b> and drag a box. Click a zone's outline to select it: drag it, pull its handles to resize (hold <kbd>Shift</kbd> to keep a circle round), nudge it with the arrow keys, or type its name, centre and size in mm in the bar under the video. <b>Duplicate</b> makes an identical zone. An <b>edge band</b> in mm adds a zone along the wall.</p>
+  <figure><img src="img/selbar.png" alt="Bar for editing a selected zone"><figcaption>A selected zone. Changing zones later is fine: the results update without another trial.</figcaption></figure>
+  <div class="step"><div class="n">5</div><h3>Set up detection</h3></div>
+  <p>Put the bees in. On the <b>Detect</b> tab, press <b>Set up detection</b>. It learns the background while the bees move (10 s), then works out the rest. Wait for <i>Found all 3 bees on this frame. Ready to track.</i> The detected bees show in magenta. If it says something else, see Part 6.</p>
+  <div class="step"><div class="n">6</div><h3>Set up the LEDs (optional)</h3></div>
+  <p>See Part 7. Leave <b>LEDs</b> unticked in the trial bar to run without them.</p>
+  <div class="step"><div class="n">7</div><h3>Run the trial</h3></div>
+  <p>In the trial bar, set the <b>Length</b> in seconds (leave it empty to run until you press Stop), tick <b>Save video</b> to keep a copy of the trial, and press <b>Start trial</b>. The video shows each bee's number and track, a red timer and a progress line. <b>Keep the tab in front</b>: browsers slow down hidden tabs.</p>
+  <figure><img src="img/live.png" alt="A trial running"><figcaption>A trial running: 3 of 3 bees found, the LED condition, and the red timer.</figcaption></figure>
+  <div class="step"><div class="n">8</div><h3>Read the results, then the next trial</h3></div>
+  <p>The results fill in when the trial ends (Part 8). Press <b>Start trial</b> again for the next one: each trial becomes its own recording, with the same arena, zones and settings. Give recordings a <b>Group</b> on the Setup tab to compare groups.</p>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 5</div>
+  <h2>Tracking a saved video</h2>
+  <ol>
+    <li>Choose <b>Saved video</b> and open a file (or paste a link to a video file, or drop it on the page).</li>
+    <li>Draw the arena, set its width and the number of bees, and add zones, as for a live trial.</li>
+    <li>Pause on a frame where every bee is visible and apart. On the Detect tab, press <b>Set up detection</b>. The background comes from frames across the whole analysis range, so bees that keep moving disappear from it.</li>
+    <li>To track only part of the video, go to the start and press <b>Start here</b>, then to the end and press <b>End here</b>. The range shows on the seek bar; <b>Whole video</b> resets it.</li>
+    <li>Press <b>Track bees</b>. It plays the video fast and samples it; for no skipped samples at all, choose <i>Read frames by: seeking</i> under Detect → Advanced (slower).</li>
+  </ol>
+  <p>Use <b>New recording</b> for each video. It copies the arena, zones and settings, which suits a fixed camera.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Part 6</div>
+  <h2>How detection works, and fixing it</h2>
+  <p>Bee Tracker compares each frame with a picture of the arena without bees (the <b>background</b>). Pixels that differ by more than the <b>threshold</b> are bee; joined pixels form a <b>blob</b>; blobs about the size of one bee are bees, and bigger blobs are bees touching. <b>Set up detection</b> chooses these for you:</p>
+  <table>
+    <tr><th style="width:1.5in">It chooses</th><th>How</th></tr>
+    <tr><td>Background</td><td>Live: the per-pixel median of frames over 10 s while the bees move. Saved video: the median of frames across the analysis range.</td></tr>
+    <tr><td>Darker or lighter</td><td>Whether the pixels that changed got darker or lighter than the background.</td></tr>
+    <tr><td>Threshold</td><td>Several times the camera's noise, then the middle of the range that finds exactly your number of bees.</td></tr>
+    <tr><td>Bee size</td><td>The median size of the blobs it found. Needed to split bees that touch.</td></tr>
+    <tr><td>Processing size</td><td>The smallest image size at which a bee is still at least 12 pixels long: faster, without losing accuracy.</td></tr>
+  </table>
+  <div class="side">
+    <figure style="margin-top:0"><img src="img/advanced.png" alt="Advanced detection settings"></figure>
+    <div>
+      <h3 style="margin-top:0">Advanced</h3>
+      <p>Every value it chose is here, tagged <span class="mono">auto</span>. Change one and it is tagged <span class="mono">set by you</span>: <i>Set up detection</i> keeps it from then on. <b>Reset all to auto</b> undoes that.</p>
+      <p><b>Capture empty arena</b> gives the cleanest background: use it before the bees go in when you can, and choose it for <i>Set up detection gets the background by</i>.</p>
+      <p>Advanced also has the tracking settings: samples per second, the maximum walking speed (used to keep identities when bees are close), and, for saved video, how frames are read and the playback speed.</p>
+      <p><b>Show detection</b>, under the video, shows the magenta mask live. Use it to check detection at any time.</p>
+    </div>
+  </div>
+  <h3>When it doesn't find every bee</h3>
+  <table>
+    <tr><th style="width:2.1in">It says</th><th>What to do</th></tr>
+    <tr><td>Found more blobs than bees</td><td>Something else is moving or casting a shadow, or the background is off. Turn on <i>Show detection</i> to see what. Fix the light, or raise the threshold under Advanced.</td></tr>
+    <tr><td>Found fewer bees than you have</td><td>Bees touching count as one; try again when they're apart. A bee that sat still while the background was learned became part of it: use <i>Capture empty arena</i>.</td></tr>
+    <tr><td>No bees found</td><td>Are the bees in view and inside the arena outline? With <i>learn while bees move</i>, they must move during those 10 s.</td></tr>
+  </table>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 7</div>
+  <h2>LED protocols</h2>
+  <p>With the live camera, each trial can play a light protocol on the two outputs (ao0, ao1) of an NI USB-6003, through the <b>LED helper</b> on the same computer. The desktop app runs the helper and connects the page for you; the LEDs tab shows <i>connected</i> and the DAQ's name. Without NI's NI-DAQmx driver, the LEDs run in simulated mode: everything works, but no LEDs light, and the panel says why.</p>
+  <p>A protocol is a list of <b>segments</b>. Each has a length, a label, and what each LED does: off, a constant level, a ramp, an exponential, a sine, a pulse train, a single pulse, random levels, or a formula of time. The protocol can repeat, and the order can be shuffled within each repeat. The LEDs tab lists the segments; <b>Edit protocol</b> widens the panel to change them.</p>
+  <ul>
+    <li><b>Test LEDs (5 V)</b> turns each output on at 5 V for 1 s, one after the other, so you can check the wiring before a trial.</li>
+    <li>Tick <b>LEDs</b> in the trial bar to play the protocol with the trial. It starts on the trial's first frame and plays on the DAQ's own clock. <i>End the trial when the protocol ends</i> stops the trial with it.</li>
+    <li>Results are also given per LED condition (the segment labels), and the charts shade each condition.</li>
+    <li>A <b>light check</b> box drawn over an LED the camera can see measures how late the camera sees each change.</li>
+  </ul>
+  <div class="note warn"><b>Check your LED driver.</b> Levels can go up to 10 V, the DAQ's limit. If your LEDs' driver is rated for less (for example 0–5 V), keep every level in the protocol below its rating.</div>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 8</div>
+  <h2>Reading the results</h2>
+  <figure><img src="img/results.png" alt="Results table"><figcaption><b>Results.</b> One row per bee and an <b>All bees</b> row. Warnings above the table flag merges, low detection, or settings changed after tracking. <i>Settings</i> holds smoothing, the moving threshold, gaps, the shortest bout, and the distance that counts as close.</figcaption></figure>
+  <figure><img src="img/pairs.png" alt="By pair table"><figcaption><b>By pair</b> (two or more bees): how long each pair spent close, how often, and when they first met.</figcaption></figure>
+  <figure><img src="img/cursor.png" alt="Track map and distance charts with the time cursor"><figcaption><b>Track map and charts.</b> Left: every bee's whole path. Right: each bee's distance from a zone (pick the zone, and measure to its edge or centre), and the distance between bees (every pair, or with many bees the nearest neighbour). Shaded bands are LED conditions; the dashed red line is the <i>close</i> distance. Point at a chart, and the map shows where each bee was then; with a saved video, click to jump the video there.</figcaption></figure>
+  <p><b>Compare recordings</b>, the second results tab, plots any measure for every recording (or every bee) by group, with Mann–Whitney or Kruskal–Wallis p-values. They are exploratory: bees in one arena are not independent.</p>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 9</div>
+  <h2>Saving and exporting your data</h2>
+  <table>
+    <tr><th style="width:1.6in">Data tab</th><th>What you get</th></tr>
+    <tr><td>Tracks CSV</td><td>Every sample of every bee: time, position in px and mm, smoothed position, speed, in each zone, distance to each zone and to every other bee, the LED condition.</td></tr>
+    <tr><td>Summary CSV</td><td>One row per bee and an <i>all</i> row per recording, for every recording, with the settings used.</td></tr>
+    <tr><td>Export to PER Scorer</td><td>Moving, each zone and <i>Near another bee</i> as behaviors, to use PER Scorer's time budgets and plots.</td></tr>
+    <tr><td>LED CSVs</td><td>Measures per LED condition, and a log of every LED segment played.</td></tr>
+    <tr><td>Save project (.json)</td><td>Everything: settings, tracks and results. <i>Open project…</i> brings it back.</td></tr>
+  </table>
+  <div class="note warn"><b>Save the project file at the end of every session.</b> Work is kept in the browser, but browser storage can be cleared, and the desktop app and the HTML file each keep their own.</div>
+</section>
+
+<section>
+  <div class="eyebrow">Part 10</div>
+  <h2>Good practice and troubleshooting</h2>
+  <ul>
+    <li>Run <b>Set up detection</b> at the start of each session, and again if the light or camera moves.</li>
+    <li>Watch the first trial with <b>Show detection</b> on, and check <b>Found</b> is near 100% for every bee.</li>
+    <li>Keep the tab in front and the computer awake during trials.</li>
+    <li>Keep camera size, samples per second and smoothing the same for everything you compare.</li>
+    <li>Save the project file, and keep the trial videos, so you can re-check or re-track a trial later.</li>
+  </ul>
+  <table>
+    <tr><th style="width:2.2in">Problem</th><th>What to do</th></tr>
+    <tr><td>Tracking did not keep up with the camera</td><td>Lower the processing size or the samples per second under Detect → Advanced, or use a smaller camera size.</td></tr>
+    <tr><td>Bee found in less than 80% of samples</td><td>Detection is missing the bee: check with Show detection, and see Part 6.</td></tr>
+    <tr><td>"Settings changed after this trial"</td><td>The arena, bee count or detection changed since tracking. A saved video can be tracked again; a live trial keeps the settings it used.</td></tr>
+    <tr><td>Distances in px, not mm</td><td>Enter the arena's width in mm on the Setup tab.</td></tr>
+    <tr><td>LEDs say simulated</td><td>The panel says why: no NI-DAQmx driver, no DAQ plugged in, or another error. Plug in the DAQ, then restart the desktop app.</td></tr>
+    <tr><td>My recordings disappeared</td><td>Browser storage was cleared, or you opened the other copy (app or HTML file). Use <i>Open project…</i> with your saved file.</td></tr>
+  </table>
+</section>
+
+<section class="flow">
+  <div class="eyebrow">Part 11</div>
+  <h2>Check your understanding</h2>
+  <ol class="qa">
+    <li>You forget to enter the arena's width. What changes in the results?</li>
+    <li>Set up detection says <i>Found 2 of 3 bees</i>. Give two possible reasons.</li>
+    <li>Three unmarked bees share an arena, and the results show 6 merges. Which row should you report, and why?</li>
+    <li>You move the food zone after the trial. Do you need to run the trial again?</li>
+    <li>Bee 2's Near bee is 25%, and the trial lasted 60 s with all of it tracked. How long was Bee 2 within the close distance of another bee?</li>
+    <li>Why must samples per second and smoothing be the same across groups you compare?</li>
+  </ol>
+  <div class="answers">
+    <b>Answers.</b>
+    1. Distances and speeds are in pixels, not mm, and the edge band can't be used.
+    2. Two bees were touching and counted as one, or a bee sat still while the background was learned and became part of it.
+    3. The All bees row: after merges, identities may have swapped, so per-bee rows are unreliable; the pooled row doesn't depend on identity.
+    4. No: zones are applied to the saved tracks, so the results update straight away.
+    5. 15 s (25% of 60 s).
+    6. Both change the distance measured: fewer samples or more smoothing cut corners and shorten the path.
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Part 12</div>
+  <h2>Quick reference card</h2>
+  <p>Print this page and keep it by the rig.</p>
+  <div class="card">
+    <div class="two">
+      <div>
+        <h3 style="margin-top:0">Every session</h3>
+        <ol>
+          <li>Start the app (or open the page); fill in initials, date, experiment</li>
+          <li>Start camera</li>
+          <li>Draw arena; width in mm; bees in arena</li>
+          <li>Zones and edge band</li>
+          <li>Bees in: Detect → Set up detection</li>
+          <li>LEDs: connect, Test LEDs (5 V)</li>
+        </ol>
+        <h3>Every trial</h3>
+        <ol>
+          <li>Check the trial bar: ✓ Camera ✓ Arena ✓ Detection</li>
+          <li>Length, Save video, LEDs</li>
+          <li>Start trial; keep the tab in front</li>
+          <li>Check Found and the warnings</li>
+        </ol>
+        <p style="margin-top:6pt"><b>End of session:</b> Data → Save project (.json).</p>
+      </div>
+      <div>
+        <h3 style="margin-top:0">Keys</h3>
+        <table>
+          <tr><td><kbd>Space</kbd></td><td>Play / pause a saved video</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Seek 1 s (<kbd>Shift</kbd>: 5 s)</td></tr>
+          <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>One frame back / forward</td></tr>
+          <tr><td>Click an outline</td><td>Select the arena, a zone or the light check</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></td><td>Move the selected shape 1 px (<kbd>Shift</kbd>: 10 px)</td></tr>
+          <tr><td><kbd>Delete</kbd></td><td>Remove the selected shape</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Stop drawing, or deselect</td></tr>
+        </table>
+        <h3>Defaults</h3>
+        <table>
+          <tr><td>Moving</td><td>faster than 3 mm/s</td></tr>
+          <tr><td>Close to another bee</td><td>within 10 mm</td></tr>
+          <tr><td>Smoothing</td><td>0.2 s</td></tr>
+          <tr><td>Test LEDs</td><td>5 V, 1 s each</td></tr>
+          <tr><td>LED limit</td><td>0–10 V</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

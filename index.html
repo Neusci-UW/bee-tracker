@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bee Tracker</title>
+<meta name="description" content="Track free-moving bees in an arena, live from a camera or from video, with a narrated walkthrough and a student tutorial.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+<style>
+/* Layout as PER Scorer's: a short intro, then three doors (watch, read, track) in the order students use them. */
+:root{
+  --bg:#f3f5f6; --panel:#fff; --ink:#18212a; --muted:#5d6b78; --line:#d9e0e5; --accent:#b06e00; --accent-ink:#fff; --accent-soft:#fbefd9;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"IBM Plex Serif",Georgia,serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12171c; --panel:#1a2128; --ink:#e4e9ed; --muted:#93a1ad; --line:#2c3640; --accent:#f0a92e; --accent-ink:#1a1206; --accent-soft:#3a2c12; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans);
+  padding:max(40px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 56px max(16px,env(safe-area-inset-left))}
+main{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{flex:none}
+h1{font-family:var(--serif);font-size:clamp(30px,5vw,42px);line-height:1.1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.lede{margin:10px 0 0;color:var(--muted);font-size:18px;max-width:62ch}
+.doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.door{display:flex;flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;text-decoration:none;color:inherit;min-width:0;transition:border-color .15s}
+.door:hover{border-color:var(--accent)}
+.door:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.door .step{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.door h2{margin:0;font-size:19px}
+.door p{margin:0;color:var(--muted);font-size:15px;flex:1}
+.door .go{font-weight:600;color:var(--accent);font-size:15px;margin-top:6px}
+.door.primary{background:var(--accent-soft);border-color:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 24px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:18px}
+.facts b{color:var(--ink);font-weight:600}
+.facts a{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.door{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="#b06e00"/><path d="M7 25c4-1 5-6 9-7s6 3 11-3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.2"/><circle cx="25" cy="12" r="3.4" fill="#fff"/></svg>
+      <h1>Bee Tracker</h1>
+    </div>
+    <p class="lede">Track every bee in an arena, live from a camera or from a saved video. Bee Tracker turns the tracks into distance, speed, time moving, time in zones and near the wall, and contact between bees, and can play an LED protocol with each trial.</p>
+  </div>
+  <div class="doors">
+    <a class="door" href="bee-walkthrough.html">
+      <span class="step">1 · Watch</span>
+      <h2>Walkthrough</h2>
+      <p>A narrated video: setting up, automatic detection, a live trial with LEDs and three bees, then the results and charts. About 3 minutes.</p>
+      <span class="go">Watch the walkthrough →</span>
+    </a>
+    <a class="door" href="Bee-Tracker-Student-Tutorial.pdf">
+      <span class="step">2 · Read</span>
+      <h2>Student tutorial</h2>
+      <p>Camera and arena setup, step-by-step trials, fixing detection, LED protocols, reading the results, practice questions and a printable reference card. PDF.</p>
+      <span class="go">Open the tutorial →</span>
+    </a>
+    <a class="door primary" href="bee-tracker.html">
+      <span class="step">3 · Track</span>
+      <h2>Open Bee Tracker</h2>
+      <p>Runs in your browser. Track a saved video, or a live camera in Chrome or Edge. Nothing is uploaded.</p>
+      <span class="go">Start tracking →</span>
+    </a>
+  </div>
+  <div class="facts">
+    <div><b>Works in</b> Chrome and Edge on a laptop or desktop.</div>
+    <div><b>Videos</b> MP4 (H.264) plays everywhere. Cameras need Chrome or Edge.</div>
+    <div><b>LEDs</b> need the desktop app on Windows with an NI USB-6003. <a href="https://github.com/varsh7777/bee-tracker/releases">Download it</a>.</div>
+    <div><b>Your data</b> stays in the browser. Save the project file at the end of each session.</div>
+  </div>
+</main>
+</body>
+</html>
